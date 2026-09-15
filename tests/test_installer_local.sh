@@ -21,3 +21,4 @@ python3 "$PROJECT_ROOT/lib/migrator.py" --migrate --dry-run | grep -q "Migration
 echo "✔ Migration dry-run test passed"
 
 echo "==> All automated tests passed successfully!"
+

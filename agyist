@@ -234,3 +234,4 @@ fi
 if [ "$DO_DESKTOP" -eq 1 ]; then
     install_product "desktop" "$TARGET_DIR" "$SCOPE" "$FORCE" "$LOCAL_ARCHIVE"
 fi
+

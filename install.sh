@@ -52,3 +52,4 @@ fi
 # Fallback: if running standalone
 echo "Error: Could not bootstrap agyist files. Please clone the repository and run ./agyist" >&2
 exit 1
+
