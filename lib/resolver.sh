@@ -8,6 +8,7 @@ DOWNLOAD_PAGE="https://antigravity.google/download"
 USER_AGENT="Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
 CACHE_FILE="/tmp/agyist-download-cache.html"
 
+# Verified fallback URLs in case machine is completely offline or download portal changes
 # Verified fallback URLs in case machine is completely offline or download portal is down
 FALLBACK_IDE_X64_VER="2.5.5"
 FALLBACK_IDE_X64_URL="https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/2.5.5-4923483625488384/linux-x64/Antigravity%20IDE.tar.gz"
@@ -57,6 +58,8 @@ resolve_official_download() {
     local resolved_url=""
     local resolved_version=""
 
+    # 1. Attempt live scraping via curl
+    if command -v curl >/dev/null 2>&1; then
     if [ -f "$CACHE_FILE" ] && [ -s "$CACHE_FILE" ]; then
         local pattern
         if [ "$product" = "ide" ]; then
@@ -64,16 +67,24 @@ resolve_official_download() {
         else
             pattern='https://[^"'\''<>\ ]+/'"$platform"'/Antigravity\.tar\.gz'
         fi
+
+        local html
+        if html="$(curl -fsSL --compressed -A "$USER_AGENT" --connect-timeout 5 --max-time 15 "$DOWNLOAD_PAGE" 2>/dev/null)"; then
+            resolved_url="$(echo "$html" | grep -oE "$pattern" | head -n 1 || true)"
+        fi
         resolved_url="$(grep -oE "$pattern" "$CACHE_FILE" | head -n 1 || true)"
     fi
 
+    # 2. Check if live scrape succeeded
     if [ -n "$resolved_url" ]; then
+        # Normalize spaces to %20
         resolved_url="${resolved_url// /%20}"
         resolved_version="$(extract_version_from_url "$resolved_url")"
         echo "$resolved_version $resolved_url live"
         return 0
     fi
 
+    # 3. Fallback to official Google edge cache / cloud storage releases
     # Fallback to official Google CDN release builds
     if [ "$product" = "ide" ]; then
         if [ "$platform" = "linux-arm" ]; then
@@ -90,6 +101,7 @@ resolve_official_download() {
     fi
 }
 
+# If executed directly as CLI
 # Direct CLI invocation
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     prod="${1:-ide}"

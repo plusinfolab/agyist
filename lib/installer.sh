@@ -239,6 +239,7 @@ install_product() {
     # Create CLI Launchers
     if [ "$product" = "ide" ]; then
         create_cli_launcher "antigravity-ide" "$installed_exec" "$bin_dir" "$install_dir"
+        create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
         if [ ! -f "$bin_dir/antigravity" ]; then
             create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
         fi

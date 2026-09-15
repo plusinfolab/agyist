@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 extract_asar_icon() {
     local asar_file="$1"
     local output_png="$2"
@@ -143,14 +145,15 @@ DESKTOP
 
     else
         # Desktop 2.0 app
-        local icon_name="antigravity"
+        local icon_name="antigravity-2"
         local icon_installed="$icon_dir/$icon_name.png"
         local extracted=0
 
-        # 1. Check bundled asset first
-        if [ -f "$SCRIPT_DIR/../assets/icons/antigravity.png" ]; then
-            cp "$SCRIPT_DIR/../assets/icons/antigravity.png" "$icon_installed"
-            chmod 644 "$icon_installed" 2>/dev/null || true
+        # 1. Use the bundled official Antigravity 2.0 icon
+        if [ -f "$SCRIPT_DIR/../assets/icons/antigravity-2.png" ]; then
+            cp "$SCRIPT_DIR/../assets/icons/antigravity-2.png" "$icon_installed"
+            cp "$SCRIPT_DIR/../assets/icons/antigravity-2.png" "$icon_dir/antigravity.png" 2>/dev/null || true
+            chmod 644 "$icon_installed" "$icon_dir/antigravity.png" 2>/dev/null || true
             extracted=1
         fi
 
@@ -165,6 +168,7 @@ DESKTOP
                 if [ -f "$asar" ]; then
                     if extract_asar_icon "$asar" "$icon_installed"; then
                         chmod 644 "$icon_installed" 2>/dev/null || true
+                        cp "$icon_installed" "$icon_dir/antigravity.png" 2>/dev/null || true
                         extracted=1
                         break
                     fi
@@ -181,7 +185,7 @@ DESKTOP
         local desktop_file="$desktop_dir/antigravity.desktop"
         cat > "$desktop_file" <<DESKTOP
 [Desktop Entry]
-Name=Antigravity
+Name=Antigravity 2.0
 Comment=Google Antigravity 2.0 Agent Platform
 GenericName=AI Agent Platform
 Exec="$binary_path" %U
@@ -200,13 +204,16 @@ Icon=$icon_name
 DESKTOP
         chmod 644 "$desktop_file" 2>/dev/null || true
 
+        # Also create antigravity-2.desktop for explicit search
+        cp "$desktop_file" "$desktop_dir/antigravity-2.desktop" 2>/dev/null || true
+
         # URL handler
         local url_desktop="$desktop_dir/antigravity-url-handler.desktop"
         cat > "$url_desktop" <<DESKTOP
 [Desktop Entry]
-Name=Antigravity - URL Handler
-Comment=Open URLs with Antigravity
-GenericName=Text Editor
+Name=Antigravity 2.0 - URL Handler
+Comment=Open URLs with Antigravity 2.0
+GenericName=AI Agent Platform
 Exec="$binary_path" --open-url %U
 Icon=$icon_name
 Type=Application
