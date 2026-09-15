@@ -27,16 +27,12 @@ run_interactive_menu() {
     echo -e "  ${CYAN}7)${RESET}  ${BOLD}Backup${RESET} Brains, Chats & Memory to an Archive"
     echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import / Restore${RESET} Brains & Chats from an Archive"
     echo -e "  ${CYAN}9)${RESET}  ${BOLD}Migrate${RESET} Legacy Antigravity Data -> Antigravity IDE"
-    echo -e "  ${CYAN}10)${RESET} View System Diagnostics & Installation Status"
-    echo -e "  ${CYAN}11)${RESET} Uninstall Antigravity"
-    echo -e "  ${CYAN}12)${RESET} Exit"
-    echo -e "  ${CYAN}10)${RESET} ${BOLD}Fix Cockpit Tools Account Switcher${RESET} (Path & Symlink Bridge)"
+    echo -e "  ${CYAN}10)${RESET} ${BOLD}Fix Cockpit Tools Account Switcher${RESET} (IDE / 2.0 / Both)"
     echo -e "  ${CYAN}11)${RESET} View System Diagnostics & Installation Status"
     echo -e "  ${CYAN}12)${RESET} Uninstall Antigravity"
     echo -e "  ${CYAN}13)${RESET} Exit"
     echo ""
 
-    read -rp "Enter choice [1-12]: " choice
     read -rp "Enter choice [1-13]: " choice
     case "$choice" in
         1)
@@ -101,7 +97,7 @@ run_interactive_menu() {
             echo ""
             # shellcheck source=lib/cockpit.sh
             source "$SCRIPT_DIR/cockpit.sh"
-            fix_cockpit_integration
+            fix_cockpit_integration ""
             ;;
         11)
             echo ""
