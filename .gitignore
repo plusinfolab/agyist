@@ -1,0 +1,16 @@
+# Reference repositories
+_reference/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Backup archives
+*.tar.gz
+*.backup
+*.migration_backup
+
+# Temporary files
+/tmp/
+*.log

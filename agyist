@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# agyist - Unified Google Antigravity & Antigravity IDE Linux Installer & Manager Suite
+# Usage:
+#   agyist                    # Interactive TUI Wizard
+#   agyist --ide              # Install or update Antigravity IDE
+#   agyist --desktop          # Install or update Antigravity 2.0 Desktop
+#   agyist --all              # Install or update both
+#   agyist --upgrade          # Check for updates and upgrade installed apps
+#   agyist --backup [file]    # Backup brains, chats, memory, and settings
+#   agyist --import <file>    # Restore / import brains & chats from backup archive
+#   agyist --migrate          # Migrate between legacy Antigravity and Antigravity IDE
+#   agyist --status           # View installation and memory diagnostics
+#   agyist --uninstall        # Remove helper-managed binaries and integrations
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+
+# shellcheck source=lib/common.sh
+source "$LIB_DIR/common.sh"
+# shellcheck source=lib/installer.sh
+source "$LIB_DIR/installer.sh"
+# shellcheck source=lib/backup.sh
+source "$LIB_DIR/backup.sh"
+# shellcheck source=lib/tui.sh
+source "$LIB_DIR/tui.sh"
+
+show_help() {
+    print_banner
+    cat <<'EOF'
+Usage:
+  agyist [COMMAND|OPTIONS]
+
+Quick Commands:
+  (no arguments)          Launch interactive TUI wizard (when run in a terminal)
+  --ide                   Install or update Antigravity IDE
+  --desktop               Install or update Antigravity 2.0 Desktop App
+  --all                   Install or update both Antigravity IDE and Desktop App
+  --upgrade, --update     Upgrade installed Antigravity components to latest official release
+  --status                Display system status, paths, versions, and memory usage
+  --uninstall             Remove installed Antigravity binaries, launchers, and desktop files
+
+Chat, Brain & Memory Management:
+  --backup [FILE]         Create a full snapshot archive of agent brains, chats, and config
+  --import FILE           Import and merge brains, chats, and config from a backup archive
+  --migrate               Migrate legacy Antigravity v1 state/memory into Antigravity IDE
+
+Advanced Options:
+  --target-dir DIR        Specify exact target installation directory
+  --scope SCOPE           Installation scope: 'system' (/opt, /usr), 'user' (~/.local), or 'auto'
+  --system                Shortcut for --scope system
+  --user                  Shortcut for --scope user
+  --force                 Force reinstallation even if already up to date
+  --file ARCHIVE          Install from a local .tar.gz archive instead of downloading
+  -y, --yes               Non-interactive mode; assume yes to all prompts
+  -h, --help              Show this help message
+
+Examples:
+  # Interactive wizard
+  agyist
+
+  # Install Antigravity IDE for the current user
+  agyist --ide --user
+
+  # Upgrade whatever is currently installed
+  agyist --upgrade
+
+  # Backup all conversation brains and memory
+  agyist --backup ~/my-antigravity-backup.tar.gz
+
+  # Restore backup archive
+  agyist --import ~/my-antigravity-backup.tar.gz
+EOF
+}
+
+# Default values
+DO_IDE=0
+DO_DESKTOP=0
+DO_UPGRADE=0
+DO_STATUS=0
+DO_BACKUP=0
+BACKUP_PATH=""
+DO_IMPORT=0
+IMPORT_PATH=""
+DO_MIGRATE=0
+DO_UNINSTALL=0
+TARGET_DIR=""
+SCOPE="auto"
+FORCE=0
+YES=0
+LOCAL_ARCHIVE=""
+
+if [ $# -eq 0 ]; then
+    if [ -t 0 ]; then
+        run_interactive_menu
+        exit 0
+    else
+        show_help
+        exit 0
+    fi
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ide)
+            DO_IDE=1
+            ;;
+        --desktop)
+            DO_DESKTOP=1
+            ;;
+        --all)
+            DO_IDE=1
+            DO_DESKTOP=1
+            ;;
+        --upgrade|--update|update|upgrade)
+            DO_UPGRADE=1
+            ;;
+        --status|status)
+            DO_STATUS=1
+            ;;
+        --backup|backup)
+            DO_BACKUP=1
+            if [ $# -gt 1 ] && [[ "$2" != --* ]]; then
+                BACKUP_PATH="$2"
+                shift
+            fi
+            ;;
+        --import|--restore|import|restore)
+            DO_IMPORT=1
+            [ $# -gt 1 ] || { log_error "--import requires an archive path argument"; exit 1; }
+            IMPORT_PATH="$2"
+            shift
+            ;;
+        --migrate|migrate)
+            DO_MIGRATE=1
+            ;;
+        --uninstall|uninstall)
+            DO_UNINSTALL=1
+            ;;
+        --target-dir)
+            [ $# -gt 1 ] || { log_error "--target-dir requires a directory path"; exit 1; }
+            TARGET_DIR="$2"
+            shift
+            ;;
+        --scope)
+            [ $# -gt 1 ] || { log_error "--scope requires 'system', 'user', or 'auto'"; exit 1; }
+            SCOPE="$2"
+            shift
+            ;;
+        --system)
+            SCOPE="system"
+            ;;
+        --user)
+            SCOPE="user"
+            ;;
+        --force)
+            FORCE=1
+            ;;
+        --file)
+            [ $# -gt 1 ] || { log_error "--file requires a path to tar.gz archive"; exit 1; }
+            LOCAL_ARCHIVE="$2"
+            shift
+            ;;
+        -y|--yes)
+            YES=1
+            ;;
+        -h|--help|help)
+            show_help
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            echo "Run 'agyist --help' for usage."
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# Dispatch commands
+if [ "$DO_STATUS" -eq 1 ]; then
+    show_system_status
+    exit 0
+fi
+
+if [ "$DO_BACKUP" -eq 1 ]; then
+    run_backup "$BACKUP_PATH"
+    exit 0
+fi
+
+if [ "$DO_IMPORT" -eq 1 ]; then
+    run_import "$IMPORT_PATH"
+    exit 0
+fi
+
+if [ "$DO_MIGRATE" -eq 1 ]; then
+    run_migration_wrapper 0
+    exit 0
+fi
+
+if [ "$DO_UNINSTALL" -eq 1 ]; then
+    if [ "$YES" -eq 0 ]; then
+        read -rp "Are you sure you want to remove Antigravity helper-managed files? [y/N]: " confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || { log_info "Uninstall aborted."; exit 0; }
+    fi
+    run_uninstall
+    exit 0
+fi
+
+if [ "$DO_UPGRADE" -eq 1 ]; then
+    log_step "Checking for installed components to upgrade..."
+    existing="$(detect_existing_installations)"
+    if [ -z "$existing" ]; then
+        log_warn "No existing installation detected to upgrade. Installing Antigravity IDE by default."
+        DO_IDE=1
+    else
+        while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            item_type="${line%%:*}"
+            item_path="${line#*:}"
+            log_step "Upgrading [$item_type] at $item_path..."
+            install_product "$item_type" "$item_path" "$SCOPE" 1 ""
+        done <<< "$existing"
+        exit 0
+    fi
+fi
+
+# Execute explicit installs
+if [ "$DO_IDE" -eq 1 ]; then
+    install_product "ide" "$TARGET_DIR" "$SCOPE" "$FORCE" "$LOCAL_ARCHIVE"
+fi
+
+if [ "$DO_DESKTOP" -eq 1 ]; then
+    install_product "desktop" "$TARGET_DIR" "$SCOPE" "$FORCE" "$LOCAL_ARCHIVE"
+fi
