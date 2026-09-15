@@ -252,6 +252,12 @@ install_product() {
     log_step "Configuring desktop integration and application icons..."
     install_desktop_integration "$product" "$install_dir" "$bin_dir/$exec_name" "$scope"
 
+    # Automatically synchronize chat history, brains and state if other version is present
+    if [ -f "$SCRIPT_DIR/migrator.py" ]; then
+        log_step "Synchronizing conversation brains, chat history, and state..."
+        python3 "$SCRIPT_DIR/migrator.py" --sync 2>/dev/null || true
+    fi
+
     log_success "=========================================================="
     log_success "  $product $version successfully installed!"
     log_success "  Location:   $install_dir"
@@ -260,5 +266,31 @@ install_product() {
 
     rm -rf "$tmpdir"
     trap - EXIT INT TERM
+}
+
+upgrade_all_installations() {
+    local force="${1:-0}"
+    local scope="${2:-auto}"
+
+    log_step "Detecting installed Antigravity components for fleet upgrade..."
+    local existing
+    existing="$(detect_existing_installations)"
+    if [ -z "$existing" ]; then
+        log_warn "No existing installation detected to upgrade. Installing Antigravity IDE..."
+        install_product "ide" "" "$scope" "$force" ""
+        return 0
+    fi
+
+    local upgraded_count=0
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        local item_type="${line%%:*}"
+        local item_path="${line#*:}"
+        log_step "Upgrading [$item_type] at $item_path..."
+        install_product "$item_type" "$item_path" "$scope" "$force" ""
+        upgraded_count=$((upgraded_count + 1))
+    done <<< "$existing"
+
+    log_success "Completed fleet upgrade of $upgraded_count installation(s)."
 }
 

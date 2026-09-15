@@ -37,3 +37,14 @@ run_migration_wrapper() {
     fi
 }
 
+run_sync() {
+    local dry_run="${1:-0}"
+    log_step "Bi-directionally synchronizing Antigravity chats, brains, and state..."
+    if [ "$dry_run" -eq 1 ]; then
+        python3 "$SCRIPT_DIR/migrator.py" --sync --dry-run
+    else
+        python3 "$SCRIPT_DIR/migrator.py" --sync
+    fi
+}
+
+

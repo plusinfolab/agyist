@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # agyist - Unified Google Antigravity & Antigravity IDE Linux Installer & Manager Suite
 # Usage:
-#   agyist                    # Interactive TUI Wizard
-#   agyist --ide              # Install or update Antigravity IDE
-#   agyist --desktop          # Install or update Antigravity 2.0 Desktop
-#   agyist --all              # Install or update both
-#   agyist --upgrade          # Check for updates and upgrade installed apps
-#   agyist --backup [file]    # Backup brains, chats, memory, and settings
-#   agyist --import <file>    # Restore / import brains & chats from backup archive
-#   agyist --migrate          # Migrate between legacy Antigravity and Antigravity IDE
-#   agyist --status           # View installation and memory diagnostics
-#   agyist --uninstall        # Remove helper-managed binaries and integrations
+#   agyist                          # Interactive TUI Wizard
+#   agyist --ide                    # Install or update Antigravity IDE
+#   agyist --desktop                # Install or update Antigravity 2.0 Desktop
+#   agyist --all                    # Install or update both Antigravity IDE and Desktop
+#   agyist --upgrade                # Check for updates and upgrade installed apps
+#   agyist --sync                   # Bi-directionally sync chats, brains, and state
+#   agyist --bundle [FILE]          # Generate standalone offline deployment bundle
+#   agyist --setup-autoupdate       # Schedule automated background updates
+#   agyist --check-update           # Check for updates (exit 0: up-to-date, 10: update available)
+#   agyist --status [--json]        # View installation and memory diagnostics
+#   agyist --backup [FILE]          # Backup brains, chats, memory, and settings
+#   agyist --import <FILE>          # Restore / import brains & chats from backup archive
+#   agyist --migrate                # Migrate legacy Antigravity to Antigravity IDE
+#   agyist --uninstall              # Remove helper-managed binaries and integrations
 
 set -euo pipefail
 
@@ -19,16 +23,20 @@ LIB_DIR="$SCRIPT_DIR/lib"
 
 # shellcheck source=lib/common.sh
 source "$LIB_DIR/common.sh"
+# shellcheck source=lib/resolver.sh
+source "$LIB_DIR/resolver.sh"
 # shellcheck source=lib/installer.sh
 source "$LIB_DIR/installer.sh"
 # shellcheck source=lib/backup.sh
 source "$LIB_DIR/backup.sh"
+# shellcheck source=lib/fleet.sh
+source "$LIB_DIR/fleet.sh"
 # shellcheck source=lib/tui.sh
 source "$LIB_DIR/tui.sh"
 
 show_help() {
     print_banner
-    cat <<'EOF'
+    cat <<'HELP_EOF'
 Usage:
   agyist [COMMAND|OPTIONS]
 
@@ -42,42 +50,64 @@ Quick Commands:
   --uninstall             Remove installed Antigravity binaries, launchers, and desktop files
 
 Chat, Brain & Memory Management:
+  --sync, --sync-chat     Bi-directionally sync chats, brains & state (2.0 <-> IDE)
   --backup [FILE]         Create a full snapshot archive of agent brains, chats, and config
   --import FILE           Import and merge brains, chats, and config from a backup archive
   --migrate               Migrate legacy Antigravity v1 state/memory into Antigravity IDE
 
-Advanced Options:
+Fleet & Enterprise Automation:
+  --bundle [FILE]         Generate standalone offline deployment bundle for office machines
+  --setup-autoupdate      Configure automated daily/weekly background updates (systemd/cron)
+  --remove-autoupdate     Disable automated background updates
+  --check-update          Check if updates are available (exit 0: current, 10: update available)
+
+Options & Flags:
   --target-dir DIR        Specify exact target installation directory
   --scope SCOPE           Installation scope: 'system' (/opt, /usr), 'user' (~/.local), or 'auto'
   --system                Shortcut for --scope system
   --user                  Shortcut for --scope user
   --force                 Force reinstallation even if already up to date
   --file ARCHIVE          Install from a local .tar.gz archive instead of downloading
+  --offline               Install from bundled packages in ./packages/ directory
+  --dry-run               Simulate actions without modifying files
+  --json                  Output status or update information in JSON format
+  -q, --quiet             Quiet mode (suppress banners and progress logs)
   -y, --yes               Non-interactive mode; assume yes to all prompts
   -h, --help              Show this help message
+
+Exit Codes for --check-update:
+  0                       All components are up to date
+  10                      One or more updates are available
 
 Examples:
   # Interactive wizard
   agyist
 
-  # Install Antigravity IDE for the current user
-  agyist --ide --user
+  # Fleet unattended upgrade of all machines
+  agyist --upgrade -y -q
 
-  # Upgrade whatever is currently installed
-  agyist --upgrade
+  # Bi-directionally synchronize chats and conversation brains
+  agyist --sync
 
-  # Backup all conversation brains and memory
-  agyist --backup ~/my-antigravity-backup.tar.gz
+  # Create an offline bundle for air-gapped office PCs
+  agyist --bundle ~/antigravity-office-bundle.tar.gz
 
-  # Restore backup archive
-  agyist --import ~/my-antigravity-backup.tar.gz
-EOF
+  # Setup automated daily updates
+  agyist --setup-autoupdate daily
+HELP_EOF
 }
 
 # Default values
 DO_IDE=0
 DO_DESKTOP=0
 DO_UPGRADE=0
+DO_CHECK_UPDATE=0
+DO_SYNC=0
+DO_BUNDLE=0
+BUNDLE_PATH=""
+DO_SETUP_AUTOUPDATE=0
+AUTOUPDATE_SCHEDULE="daily"
+DO_REMOVE_AUTOUPDATE=0
 DO_STATUS=0
 DO_BACKUP=0
 BACKUP_PATH=""
@@ -89,6 +119,8 @@ TARGET_DIR=""
 SCOPE="auto"
 FORCE=0
 YES=0
+DRY_RUN=0
+JSON_OUTPUT=0
 LOCAL_ARCHIVE=""
 
 if [ $# -eq 0 ]; then
@@ -116,8 +148,37 @@ while [ $# -gt 0 ]; do
         --upgrade|--update|update|upgrade)
             DO_UPGRADE=1
             ;;
+        --check-update|check-update)
+            DO_CHECK_UPDATE=1
+            ;;
+        --sync|--sync-chat|sync)
+            DO_SYNC=1
+            ;;
+        --bundle|bundle)
+            DO_BUNDLE=1
+            if [ $# -gt 1 ] && [[ "$2" != --* ]]; then
+                BUNDLE_PATH="$2"
+                shift
+            fi
+            ;;
+        --setup-autoupdate|setup-autoupdate)
+            DO_SETUP_AUTOUPDATE=1
+            if [ $# -gt 1 ] && [[ "$2" != --* ]]; then
+                AUTOUPDATE_SCHEDULE="$2"
+                shift
+            fi
+            ;;
+        --remove-autoupdate|remove-autoupdate)
+            DO_REMOVE_AUTOUPDATE=1
+            ;;
         --status|status)
             DO_STATUS=1
+            ;;
+        --json)
+            JSON_OUTPUT=1
+            ;;
+        -q|--quiet)
+            QUIET=1
             ;;
         --backup|backup)
             DO_BACKUP=1
@@ -157,10 +218,18 @@ while [ $# -gt 0 ]; do
         --force)
             FORCE=1
             ;;
+        --dry-run)
+            DRY_RUN=1
+            ;;
         --file)
             [ $# -gt 1 ] || { log_error "--file requires a path to tar.gz archive"; exit 1; }
             LOCAL_ARCHIVE="$2"
             shift
+            ;;
+        --offline)
+            if [ -f "$SCRIPT_DIR/packages/antigravity-ide.tar.gz" ]; then
+                LOCAL_ARCHIVE="$SCRIPT_DIR/packages/antigravity-ide.tar.gz"
+            fi
             ;;
         -y|--yes)
             YES=1
@@ -178,9 +247,58 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# Dispatch commands
+# Dispatch non-install commands first
 if [ "$DO_STATUS" -eq 1 ]; then
-    show_system_status
+    show_system_status "$JSON_OUTPUT"
+    exit 0
+fi
+
+if [ "$DO_CHECK_UPDATE" -eq 1 ]; then
+    existing="$(detect_existing_installations)"
+    if [ -z "$existing" ]; then
+        log_warn "No installations detected to check."
+        check_for_updates "ide" ""
+        exit $?
+    fi
+
+    has_update=0
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        item_type="${line%%:*}"
+        item_path="${line#*:}"
+        log_step "Checking updates for [$item_type] at $item_path..."
+        if ! check_for_updates "$item_type" "$item_path"; then
+            has_update=1
+        fi
+        echo ""
+    done <<< "$existing"
+
+    if [ "$has_update" -eq 1 ]; then
+        log_info "Update(s) available for installed components."
+        exit 10
+    else
+        log_success "All installed components are up to date."
+        exit 0
+    fi
+fi
+
+if [ "$DO_SYNC" -eq 1 ]; then
+    run_sync "$DRY_RUN"
+    exit 0
+fi
+
+if [ "$DO_BUNDLE" -eq 1 ]; then
+    create_offline_bundle "$BUNDLE_PATH" 1 1
+    exit 0
+fi
+
+if [ "$DO_SETUP_AUTOUPDATE" -eq 1 ]; then
+    setup_autoupdate "$AUTOUPDATE_SCHEDULE" "$SCOPE"
+    exit 0
+fi
+
+if [ "$DO_REMOVE_AUTOUPDATE" -eq 1 ]; then
+    remove_autoupdate
     exit 0
 fi
 
@@ -195,7 +313,7 @@ if [ "$DO_IMPORT" -eq 1 ]; then
 fi
 
 if [ "$DO_MIGRATE" -eq 1 ]; then
-    run_migration_wrapper 0
+    run_migration_wrapper "$DRY_RUN"
     exit 0
 fi
 
@@ -209,21 +327,8 @@ if [ "$DO_UNINSTALL" -eq 1 ]; then
 fi
 
 if [ "$DO_UPGRADE" -eq 1 ]; then
-    log_step "Checking for installed components to upgrade..."
-    existing="$(detect_existing_installations)"
-    if [ -z "$existing" ]; then
-        log_warn "No existing installation detected to upgrade. Installing Antigravity IDE by default."
-        DO_IDE=1
-    else
-        while IFS= read -r line; do
-            [ -n "$line" ] || continue
-            item_type="${line%%:*}"
-            item_path="${line#*:}"
-            log_step "Upgrading [$item_type] at $item_path..."
-            install_product "$item_type" "$item_path" "$SCOPE" 1 ""
-        done <<< "$existing"
-        exit 0
-    fi
+    upgrade_all_installations "$FORCE" "$SCOPE"
+    exit 0
 fi
 
 # Execute explicit installs
@@ -234,4 +339,3 @@ fi
 if [ "$DO_DESKTOP" -eq 1 ]; then
     install_product "desktop" "$TARGET_DIR" "$SCOPE" "$FORCE" "$LOCAL_ARCHIVE"
 fi
-

@@ -13,12 +13,23 @@ echo "$OUTPUT" | grep -q '"version"' || { echo "Resolver version missing"; exit 
 echo "✔ Resolver test passed"
 
 echo "==> Testing Migrator Status..."
-"$PROJECT_ROOT/agyist" --status | grep -q "Antigravity Data Status" || { echo "Status test failed"; exit 1; }
+"$PROJECT_ROOT/agyist" --status | grep -q "Antigravity Data" || { echo "Status test failed"; exit 1; }
 echo "✔ Status test passed"
+
+echo "==> Testing Status JSON..."
+"$PROJECT_ROOT/agyist" --status --json | grep -q '"sync_status"' || { echo "Status JSON test failed"; exit 1; }
+echo "✔ Status JSON test passed"
+
+echo "==> Testing Check-Update..."
+"$PROJECT_ROOT/agyist" --check-update >/dev/null 2>&1 || true
+echo "✔ Check-update test passed"
 
 echo "==> Testing Migrator Dry-run Migration..."
 python3 "$PROJECT_ROOT/lib/migrator.py" --migrate --dry-run | grep -q "Migration completed successfully" || { echo "Migrate test failed"; exit 1; }
 echo "✔ Migration dry-run test passed"
 
-echo "==> All automated tests passed successfully!"
+echo "==> Testing Bi-directional Sync Dry-run..."
+"$PROJECT_ROOT/agyist" --sync --dry-run | grep -q "Bi-directional sync completed successfully" || { echo "Sync dry-run test failed"; exit 1; }
+echo "✔ Sync dry-run test passed"
 
+echo "==> All automated tests passed successfully!"

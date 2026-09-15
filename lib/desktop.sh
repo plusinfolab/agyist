@@ -21,7 +21,7 @@ if not asar_path.is_file():
 
 try:
     with asar_path.open('rb') as f:
-        f.read(4) # 4 bytes
+        f.read(4)
         header_size = struct.unpack('<I', f.read(4))[0]
         f.read(4)
         json_size = struct.unpack('<I', f.read(4))[0]
@@ -29,7 +29,6 @@ try:
         
     icon_info = header.get('files', {}).get('icon.png')
     if not icon_info:
-        # Check subdirectories
         for name, meta in header.get('files', {}).items():
             if name.endswith('.png') and 'size' in meta:
                 icon_info = meta
@@ -55,17 +54,20 @@ install_desktop_integration() {
     local binary_path="$3"   # e.g. /usr/local/bin/antigravity-ide or ~/.local/bin/antigravity-ide
     local scope="${4:-auto}" # "system", "user", or "auto"
 
-    local hicolor_dir desktop_dir pixmap_dir
+    local icon_dir hicolor_dir desktop_dir pixmap_dir
     if [ "$scope" = "system" ] || ([ "$scope" = "auto" ] && [ "$(id -u)" -eq 0 ]); then
+        icon_dir="/usr/share/icons/hicolor/512x512/apps"
         hicolor_dir="/usr/share/icons/hicolor"
         desktop_dir="/usr/share/applications"
         pixmap_dir="/usr/share/pixmaps"
     else
+        icon_dir="$HOME/.local/share/icons/hicolor/512x512/apps"
         hicolor_dir="$HOME/.local/share/icons/hicolor"
         desktop_dir="$HOME/.local/share/applications"
         pixmap_dir="$HOME/.local/share/pixmaps"
     fi
 
+    mkdir -p "$icon_dir" "$desktop_dir"
     mkdir -p "$hicolor_dir/512x512/apps" "$hicolor_dir/256x256/apps" "$hicolor_dir/scalable/apps" "$desktop_dir"
     if [ -w "$pixmap_dir" ] || [ "$(id -u)" -eq 0 ]; then
         mkdir -p "$pixmap_dir" 2>/dev/null || true
@@ -84,6 +86,7 @@ install_desktop_integration() {
             "$install_dir/antigravity.png"
             "/usr/share/pixmaps/antigravity.png"
         )
+        local found_icon=0
         for cand in "${candidates[@]}"; do
             if [ -f "$cand" ]; then
                 cp "$cand" "$icon_installed"
@@ -92,6 +95,7 @@ install_desktop_integration() {
                 if [ -w "$pixmap_dir" ]; then
                     cp "$cand" "$pixmap_dir/$icon_name.png" 2>/dev/null || true
                 fi
+                found_icon=1
                 break
             fi
         done
@@ -101,14 +105,14 @@ install_desktop_integration() {
         cat > "$desktop_file" <<DESKTOP
 [Desktop Entry]
 Name=Antigravity IDE
-Comment=AI-First Integrated Development Environment
+Comment=Google Antigravity IDE - Code with Gemini
 GenericName=Text Editor
 Exec="$binary_path" %F
 Icon=$icon_name
 Type=Application
 StartupNotify=true
 StartupWMClass=antigravity-ide
-Categories=TextEditor;Development;IDE;
+Categories=Development;IDE;TextEditor;
 MimeType=inode/directory;text/plain;application/x-code-workspace;application/x-antigravity-workspace;x-scheme-handler/antigravity-ide;
 Actions=new-empty-window;
 Keywords=vscode;antigravity;ide;ai;
@@ -140,6 +144,7 @@ DESKTOP
     else
         # Desktop 2.0 app
         local icon_name="antigravity-2"
+        local icon_installed="$icon_dir/$icon_name.png"
 
         # Install genuine Antigravity 2.0 icons into hicolor directories & pixmaps
         local icon_256="$SCRIPT_DIR/../assets/icons/antigravity-2.png"
@@ -147,20 +152,24 @@ DESKTOP
         [ -f "$icon_512" ] || icon_512="$icon_256"
         local icon_svg="$SCRIPT_DIR/../assets/icons/antigravity-2.svg"
 
-        if [ -f "$icon_512" ]; then
-            cp "$icon_512" "$hicolor_dir/512x512/apps/$icon_name.png"
-            cp "$icon_512" "$hicolor_dir/512x512/apps/antigravity.png" 2>/dev/null || true
-            chmod 644 "$hicolor_dir/512x512/apps/$icon_name.png" "$hicolor_dir/512x512/apps/antigravity.png" 2>/dev/null || true
-        fi
-
         if [ -f "$icon_256" ]; then
-            cp "$icon_256" "$hicolor_dir/256x256/apps/$icon_name.png"
+            cp "$icon_256" "$icon_installed"
+            cp "$icon_256" "$icon_dir/antigravity.png" 2>/dev/null || true
+            chmod 644 "$icon_installed" "$icon_dir/antigravity.png" 2>/dev/null || true
+
+            cp "$icon_256" "$hicolor_dir/256x256/apps/$icon_name.png" 2>/dev/null || true
             cp "$icon_256" "$hicolor_dir/256x256/apps/antigravity.png" 2>/dev/null || true
             chmod 644 "$hicolor_dir/256x256/apps/$icon_name.png" "$hicolor_dir/256x256/apps/antigravity.png" 2>/dev/null || true
         fi
 
+        if [ -f "$icon_512" ]; then
+            cp "$icon_512" "$hicolor_dir/512x512/apps/$icon_name.png" 2>/dev/null || true
+            cp "$icon_512" "$hicolor_dir/512x512/apps/antigravity.png" 2>/dev/null || true
+            chmod 644 "$hicolor_dir/512x512/apps/$icon_name.png" "$hicolor_dir/512x512/apps/antigravity.png" 2>/dev/null || true
+        fi
+
         if [ -f "$icon_svg" ]; then
-            cp "$icon_svg" "$hicolor_dir/scalable/apps/$icon_name.svg"
+            cp "$icon_svg" "$hicolor_dir/scalable/apps/$icon_name.svg" 2>/dev/null || true
             cp "$icon_svg" "$hicolor_dir/scalable/apps/antigravity.svg" 2>/dev/null || true
             chmod 644 "$hicolor_dir/scalable/apps/$icon_name.svg" "$hicolor_dir/scalable/apps/antigravity.svg" 2>/dev/null || true
         fi
@@ -221,7 +230,19 @@ DESKTOP
         update-desktop-database "$desktop_dir" >/dev/null 2>&1 || true
     fi
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        local base_icon_theme
+        base_icon_theme="$(dirname "$(dirname "$(dirname "$icon_dir")")")"
+        gtk-update-icon-cache -q -f "$base_icon_theme" >/dev/null 2>&1 || true
         gtk-update-icon-cache -q -f "$hicolor_dir" >/dev/null 2>&1 || true
     fi
 }
 
+install_nautilus_extension() {
+    local nautilus_dir="$HOME/.local/share/nautilus-python/extensions"
+    mkdir -p "$nautilus_dir"
+    local ext_script="$SCRIPT_DIR/nautilus.py"
+    if [ -f "$ext_script" ]; then
+        cp "$ext_script" "$nautilus_dir/antigravity_nautilus.py"
+        chmod 644 "$nautilus_dir/antigravity_nautilus.py"
+    fi
+}
