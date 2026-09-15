@@ -113,9 +113,11 @@ install_product() {
         # shellcheck source=lib/resolver.sh
         source "$SCRIPT_DIR/resolver.sh"
         local resolve_output
+        resolve_output="$(python3 "$SCRIPT_DIR/resolver.py" --product "$product" --platform "$platform")"
         resolve_output="$(resolve_official_download "$product" "$platform")"
         version="$(echo "$resolve_output" | awk '{print $1}')"
         url="$(echo "$resolve_output" | awk '{print $2}')"
+        log_info "Latest version: $version"
         local source_type
         source_type="$(echo "$resolve_output" | awk '{print $3}')"
         log_info "Latest version: $version (source: $source_type)"
@@ -161,7 +163,7 @@ install_product() {
 
     local tmpdir
     tmpdir="$(mktemp -d "/tmp/agyist-$product-XXXXXX")"
-    trap 'rm -rf "$tmpdir"' EXIT
+    trap 'rm -rf "${tmpdir:-}"' EXIT INT TERM
 
     local archive="$tmpdir/archive.tar.gz"
     if [ -n "$local_archive" ] && [ -f "$local_archive" ]; then
@@ -250,5 +252,8 @@ install_product() {
     log_success "  Location:   $install_dir"
     log_success "  Launcher:   $bin_dir/$exec_name"
     log_success "=========================================================="
+
+    rm -rf "$tmpdir"
+    trap - EXIT INT TERM
 }
 

@@ -68,6 +68,7 @@ install_desktop_integration() {
         local icon_name="antigravity-ide"
         local icon_installed="$icon_dir/$icon_name.png"
 
+        # Search for icon in extracted IDE files
         # Search for icon in extracted IDE files or bundled assets
         local candidates=(
             "$SCRIPT_DIR/../assets/icons/antigravity-ide.png"
@@ -144,15 +145,16 @@ DESKTOP
         # Desktop 2.0 app
         local icon_name="antigravity"
         local icon_installed="$icon_dir/$icon_name.png"
+        local extracted=0
 
-        # Check bundled asset first
+        # 1. Check bundled asset first
         if [ -f "$SCRIPT_DIR/../assets/icons/antigravity.png" ]; then
             cp "$SCRIPT_DIR/../assets/icons/antigravity.png" "$icon_installed"
             chmod 644 "$icon_installed" 2>/dev/null || true
             extracted=1
         fi
 
-        # Try extracting from app.asar if not yet extracted
+        # 2. Try extracting from app.asar if not yet extracted
         if [ "$extracted" -eq 0 ]; then
             local asar_candidates=(
                 "$install_dir/resources/app.asar"
@@ -170,6 +172,7 @@ DESKTOP
             done
         fi
 
+        # 3. Fallback to existing system pixmap if present
         if [ "$extracted" -eq 0 ] && [ -f "/usr/share/pixmaps/antigravity.png" ]; then
             cp "/usr/share/pixmaps/antigravity.png" "$icon_installed"
         fi
