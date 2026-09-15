@@ -160,3 +160,4 @@ run_uninstall() {
 
     log_success "Uninstall completed. User chats, brains and settings in ~/.gemini and ~/.config were preserved."
 }
+

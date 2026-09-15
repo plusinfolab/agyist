@@ -44,3 +44,4 @@ class OpenInAntigravityIDE(GObject.GObject, Nautilus.MenuProvider):
         )
         item.connect('activate', lambda _item: subprocess.Popen(['antigravity-ide', path]))
         return [item]
+

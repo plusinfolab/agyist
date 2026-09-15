@@ -183,3 +183,52 @@ resolve_default_install_dir() {
         fi
     fi
 }
+
+# Auto-install missing system dependencies
+ensure_dependencies() {
+    local missing=()
+    for cmd in curl tar gzip sed grep; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if [ ${#missing[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    log_step "Missing required tools: ${missing[*]}. Attempting automatic installation..."
+
+    if [ "$(id -u)" -ne 0 ] && ! can_use_sudo; then
+        log_error "Missing tools (${missing[*]}) and root/sudo privileges are not available."
+        log_error "Please install them via your system package manager."
+        exit 1
+    fi
+
+    local SUDO=""
+    if [ "$(id -u)" -ne 0 ]; then
+        SUDO="sudo"
+    fi
+
+    if command -v apt-get >/dev/null 2>&1; then
+        log_info "Detected apt package manager (Debian/Ubuntu/Mint)..."
+        $SUDO apt-get update -qq
+        $SUDO apt-get install -y -qq curl tar gzip desktop-file-utils xdg-utils ca-certificates
+    elif command -v dnf >/dev/null 2>&1; then
+        log_info "Detected dnf package manager (Fedora/RHEL)..."
+        $SUDO dnf install -y -q curl tar gzip desktop-file-utils xdg-utils ca-certificates
+    elif command -v pacman >/dev/null 2>&1; then
+        log_info "Detected pacman package manager (Arch/Manjaro)..."
+        $SUDO pacman -Sy --noconfirm --needed curl tar gzip desktop-file-utils xdg-utils ca-certificates
+    elif command -v zypper >/dev/null 2>&1; then
+        log_info "Detected zypper package manager (openSUSE)..."
+        $SUDO zypper --quiet install -y curl tar gzip desktop-file-utils xdg-utils ca-certificates
+    elif command -v apk >/dev/null 2>&1; then
+        log_info "Detected apk package manager (Alpine)..."
+        $SUDO apk add --no-cache curl tar gzip xdg-utils ca-certificates
+    else
+        log_warn "Unknown package manager. Please ensure ${missing[*]} are installed."
+    fi
+}
+
+

@@ -36,3 +36,4 @@ run_migration_wrapper() {
         python3 "$SCRIPT_DIR/migrator.py" --migrate
     fi
 }
+

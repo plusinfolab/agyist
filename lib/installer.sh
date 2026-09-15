@@ -101,17 +101,24 @@ install_product() {
 
     log_step "Resolving official Google package for $product ($platform)..."
     
+    ensure_dependencies
+
     local version url
     if [ -n "$local_archive" ] && [ -f "$local_archive" ]; then
         version="local-package"
         url="file://$local_archive"
         log_info "Using local archive: $local_archive"
     else
+        # Resolve official Google package using pure native Bash scraper
+        # shellcheck source=lib/resolver.sh
+        source "$SCRIPT_DIR/resolver.sh"
         local resolve_output
-        resolve_output="$(python3 "$SCRIPT_DIR/resolver.py" --product "$product" --platform "$platform")"
+        resolve_output="$(resolve_official_download "$product" "$platform")"
         version="$(echo "$resolve_output" | awk '{print $1}')"
         url="$(echo "$resolve_output" | awk '{print $2}')"
-        log_info "Latest version: $version"
+        local source_type
+        source_type="$(echo "$resolve_output" | awk '{print $3}')"
+        log_info "Latest version: $version (source: $source_type)"
         log_dim "URL: $url"
     fi
 
@@ -244,3 +251,4 @@ install_product() {
     log_success "  Launcher:   $bin_dir/$exec_name"
     log_success "=========================================================="
 }
+

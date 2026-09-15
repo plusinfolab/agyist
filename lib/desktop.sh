@@ -68,8 +68,9 @@ install_desktop_integration() {
         local icon_name="antigravity-ide"
         local icon_installed="$icon_dir/$icon_name.png"
 
-        # Search for icon in extracted IDE files
+        # Search for icon in extracted IDE files or bundled assets
         local candidates=(
+            "$SCRIPT_DIR/../assets/icons/antigravity-ide.png"
             "$install_dir/resources/app/resources/linux/code.png"
             "$install_dir/Antigravity-IDE/resources/app/resources/linux/code.png"
             "$install_dir/resources/app/resources/linux/antigravity.png"
@@ -144,22 +145,30 @@ DESKTOP
         local icon_name="antigravity"
         local icon_installed="$icon_dir/$icon_name.png"
 
-        # Try extracting from app.asar
-        local asar_candidates=(
-            "$install_dir/resources/app.asar"
-            "$install_dir/Antigravity-x64/resources/app.asar"
-            "$install_dir/Antigravity-arm64/resources/app.asar"
-        )
-        local extracted=0
-        for asar in "${asar_candidates[@]}"; do
-            if [ -f "$asar" ]; then
-                if extract_asar_icon "$asar" "$icon_installed"; then
-                    chmod 644 "$icon_installed" 2>/dev/null || true
-                    extracted=1
-                    break
+        # Check bundled asset first
+        if [ -f "$SCRIPT_DIR/../assets/icons/antigravity.png" ]; then
+            cp "$SCRIPT_DIR/../assets/icons/antigravity.png" "$icon_installed"
+            chmod 644 "$icon_installed" 2>/dev/null || true
+            extracted=1
+        fi
+
+        # Try extracting from app.asar if not yet extracted
+        if [ "$extracted" -eq 0 ]; then
+            local asar_candidates=(
+                "$install_dir/resources/app.asar"
+                "$install_dir/Antigravity-x64/resources/app.asar"
+                "$install_dir/Antigravity-arm64/resources/app.asar"
+            )
+            for asar in "${asar_candidates[@]}"; do
+                if [ -f "$asar" ]; then
+                    if extract_asar_icon "$asar" "$icon_installed"; then
+                        chmod 644 "$icon_installed" 2>/dev/null || true
+                        extracted=1
+                        break
+                    fi
                 fi
-            fi
-        done
+            done
+        fi
 
         if [ "$extracted" -eq 0 ] && [ -f "/usr/share/pixmaps/antigravity.png" ]; then
             cp "/usr/share/pixmaps/antigravity.png" "$icon_installed"
@@ -216,3 +225,4 @@ DESKTOP
         gtk-update-icon-cache -q -f "$base_icon_theme" >/dev/null 2>&1 || true
     fi
 }
+
