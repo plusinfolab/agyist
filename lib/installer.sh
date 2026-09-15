@@ -163,6 +163,7 @@ install_product() {
 
     local tmpdir
     tmpdir="$(mktemp -d "/tmp/agyist-$product-XXXXXX")"
+    trap 'rm -rf "$tmpdir"' EXIT
     trap 'rm -rf "${tmpdir:-}"' EXIT INT TERM
 
     local archive="$tmpdir/archive.tar.gz"
@@ -238,9 +239,12 @@ install_product() {
     # Create CLI Launchers
     if [ "$product" = "ide" ]; then
         create_cli_launcher "antigravity-ide" "$installed_exec" "$bin_dir" "$install_dir"
-        create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
+        if [ ! -f "$bin_dir/antigravity" ]; then
+            create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
+        fi
     else
         create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
+        create_cli_launcher "antigravity-desktop" "$installed_exec" "$bin_dir" "$install_dir"
     fi
 
     # Install Desktop & Icon Integration
