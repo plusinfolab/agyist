@@ -32,4 +32,8 @@ echo "==> Testing Bi-directional Sync Dry-run..."
 "$PROJECT_ROOT/agyist" --sync --dry-run | grep -q "Bi-directional sync completed successfully" || { echo "Sync dry-run test failed"; exit 1; }
 echo "✔ Sync dry-run test passed"
 
+echo "==> Testing Cockpit Tools Diagnostics..."
+"$PROJECT_ROOT/agyist" --diagnose-cockpit | grep "Cockpit Tools & Antigravity IDE Integration Diagnostics" >/dev/null || { echo "Cockpit diagnose test failed"; exit 1; }
+echo "✔ Cockpit diagnose test passed"
+
 echo "==> All automated tests passed successfully!"

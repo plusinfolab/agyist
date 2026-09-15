@@ -61,6 +61,10 @@ Fleet & Enterprise Automation:
   --remove-autoupdate     Disable automated background updates
   --check-update          Check if updates are available (exit 0: current, 10: update available)
 
+Integrations & Third-Party Tools:
+  --cockpit, --fix-cockpit Configure & fix Cockpit Tools account switcher for Antigravity IDE
+  --diagnose-cockpit       Diagnose Cockpit Tools integration & path configuration
+
 Options & Flags:
   --target-dir DIR        Specify exact target installation directory
   --scope SCOPE           Installation scope: 'system' (/opt, /usr), 'user' (~/.local), or 'auto'
@@ -114,6 +118,8 @@ BACKUP_PATH=""
 DO_IMPORT=0
 IMPORT_PATH=""
 DO_MIGRATE=0
+DO_COCKPIT=0
+DO_DIAGNOSE_COCKPIT=0
 DO_UNINSTALL=0
 TARGET_DIR=""
 SCOPE="auto"
@@ -195,6 +201,12 @@ while [ $# -gt 0 ]; do
             ;;
         --migrate|migrate)
             DO_MIGRATE=1
+            ;;
+        --cockpit|--fix-cockpit|cockpit)
+            DO_COCKPIT=1
+            ;;
+        --diagnose-cockpit)
+            DO_DIAGNOSE_COCKPIT=1
             ;;
         --uninstall|uninstall)
             DO_UNINSTALL=1
@@ -314,6 +326,20 @@ fi
 
 if [ "$DO_MIGRATE" -eq 1 ]; then
     run_migration_wrapper "$DRY_RUN"
+    exit 0
+fi
+
+if [ "$DO_DIAGNOSE_COCKPIT" -eq 1 ]; then
+    # shellcheck source=lib/cockpit.sh
+    source "$LIB_DIR/cockpit.sh"
+    diagnose_cockpit
+    exit 0
+fi
+
+if [ "$DO_COCKPIT" -eq 1 ]; then
+    # shellcheck source=lib/cockpit.sh
+    source "$LIB_DIR/cockpit.sh"
+    fix_cockpit_integration
     exit 0
 fi
 

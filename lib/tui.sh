@@ -30,9 +30,14 @@ run_interactive_menu() {
     echo -e "  ${CYAN}10)${RESET} View System Diagnostics & Installation Status"
     echo -e "  ${CYAN}11)${RESET} Uninstall Antigravity"
     echo -e "  ${CYAN}12)${RESET} Exit"
+    echo -e "  ${CYAN}10)${RESET} ${BOLD}Fix Cockpit Tools Account Switcher${RESET} (Path & Symlink Bridge)"
+    echo -e "  ${CYAN}11)${RESET} View System Diagnostics & Installation Status"
+    echo -e "  ${CYAN}12)${RESET} Uninstall Antigravity"
+    echo -e "  ${CYAN}13)${RESET} Exit"
     echo ""
 
     read -rp "Enter choice [1-12]: " choice
+    read -rp "Enter choice [1-13]: " choice
     case "$choice" in
         1)
             echo ""
@@ -95,8 +100,15 @@ run_interactive_menu() {
         10)
             echo ""
             show_system_status 0
+            # shellcheck source=lib/cockpit.sh
+            source "$SCRIPT_DIR/cockpit.sh"
+            fix_cockpit_integration
             ;;
         11)
+            echo ""
+            show_system_status 0
+            ;;
+        12)
             echo ""
             read -rp "Are you sure you want to uninstall Antigravity? [y/N]: " confirm
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
@@ -106,6 +118,7 @@ run_interactive_menu() {
             fi
             ;;
         12|q|Q)
+        13|q|Q)
             echo "Exiting."
             exit 0
             ;;
