@@ -99,7 +99,6 @@ run_interactive_menu() {
             ;;
         10)
             echo ""
-            show_system_status 0
             # shellcheck source=lib/cockpit.sh
             source "$SCRIPT_DIR/cockpit.sh"
             fix_cockpit_integration
@@ -117,7 +116,6 @@ run_interactive_menu() {
                 log_info "Uninstall cancelled."
             fi
             ;;
-        12|q|Q)
         13|q|Q)
             echo "Exiting."
             exit 0

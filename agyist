@@ -119,6 +119,7 @@ DO_IMPORT=0
 IMPORT_PATH=""
 DO_MIGRATE=0
 DO_COCKPIT=0
+COCKPIT_TARGET=""
 DO_DIAGNOSE_COCKPIT=0
 DO_UNINSTALL=0
 TARGET_DIR=""
@@ -204,6 +205,10 @@ while [ $# -gt 0 ]; do
             ;;
         --cockpit|--fix-cockpit|cockpit)
             DO_COCKPIT=1
+            if [ $# -gt 1 ] && [[ "$2" =~ ^(ide|desktop|2\.0|both|all)$ ]]; then
+                COCKPIT_TARGET="$2"
+                shift
+            fi
             ;;
         --diagnose-cockpit)
             DO_DIAGNOSE_COCKPIT=1
@@ -339,7 +344,7 @@ fi
 if [ "$DO_COCKPIT" -eq 1 ]; then
     # shellcheck source=lib/cockpit.sh
     source "$LIB_DIR/cockpit.sh"
-    fix_cockpit_integration
+    fix_cockpit_integration "$COCKPIT_TARGET"
     exit 0
 fi
 

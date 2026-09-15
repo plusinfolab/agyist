@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # lib/cockpit.sh - Cockpit Tools integration & account switcher bridge for Antigravity
-# Ensures Cockpit Tools correctly detects and switches accounts for Antigravity IDE.
+# Supports connecting Cockpit Tools to Antigravity IDE, Antigravity 2.0 Desktop, or Both.
 
 set -euo pipefail
 
@@ -30,31 +30,93 @@ detect_cockpit_app() {
     fi
 }
 
+is_ide_installation() {
+    local exec_or_dir="$1"
+    [ -n "$exec_or_dir" ] || return 1
+
+    local dir
+    if [ -f "$exec_or_dir" ]; then
+        local real_file
+        real_file="$(readlink -f "$exec_or_dir" 2>/dev/null || echo "$exec_or_dir")"
+        dir="$(dirname "$real_file")"
+        [ "$(basename "$dir")" = "bin" ] && dir="$(dirname "$dir")"
+    else
+        dir="$exec_or_dir"
+    fi
+
+    [ -f "$dir/resources/app/product.json" ] || [ -f "$dir/resources/app/out/cli.js" ]
+}
+
 resolve_ide_executable() {
-    # Check PATH first
+    # 1. Check PATH for explicit 'antigravity-ide'
     if command -v antigravity-ide >/dev/null 2>&1; then
         command -v antigravity-ide
         return 0
     fi
+
+    # 2. Check /usr/share/antigravity (standard IDE location)
+    if [ -x "/usr/share/antigravity/bin/antigravity" ] && is_ide_installation "/usr/share/antigravity"; then
+        echo "/usr/share/antigravity/bin/antigravity"
+        return 0
+    elif [ -x "/usr/share/antigravity/antigravity" ] && is_ide_installation "/usr/share/antigravity"; then
+        echo "/usr/share/antigravity/antigravity"
+        return 0
+    fi
+
+    # 3. Check /usr/bin/antigravity
+    if [ -x "/usr/bin/antigravity" ] && is_ide_installation "/usr/bin/antigravity"; then
+        echo "/usr/bin/antigravity"
+        return 0
+    fi
+
+    # 4. Check user local dirs
+    for cand in \
+        "$HOME/.local/share/antigravity-ide/bin/antigravity-ide" \
+        "$HOME/.local/share/antigravity-ide/antigravity" \
+        "$HOME/.local/bin/antigravity-ide" \
+        "$HOME/.local/share/antigravity/bin/antigravity" \
+        "$HOME/.local/share/antigravity/antigravity" \
+        "/opt/antigravity-ide/bin/antigravity-ide" \
+        "/opt/antigravity/bin/antigravity"; do
+        if [ -x "$cand" ] && is_ide_installation "$cand"; then
+            echo "$cand"
+            return 0
+        fi
+    done
+
+    # Fallback to any antigravity launcher
     if command -v antigravity >/dev/null 2>&1; then
         command -v antigravity
         return 0
     fi
 
-    # Check common install locations
+    echo ""
+}
+
+resolve_desktop_executable() {
+    # 1. Check explicit desktop launcher
+    if command -v antigravity-desktop >/dev/null 2>&1; then
+        command -v antigravity-desktop
+        return 0
+    fi
+
+    # 2. Check non-IDE install locations
     for cand in \
-        "/usr/share/antigravity/bin/antigravity" \
-        "/usr/share/antigravity/antigravity" \
-        "/usr/local/bin/antigravity" \
+        "$HOME/.local/share/antigravity/antigravity" \
         "/opt/antigravity/antigravity" \
-        "$HOME/.local/bin/antigravity" \
-        "$HOME/.local/share/antigravity/bin/antigravity" \
-        "$HOME/.local/share/antigravity/antigravity"; do
-        if [ -x "$cand" ]; then
+        "/usr/share/antigravity-desktop/antigravity" \
+        "/usr/bin/antigravity"; do
+        if [ -x "$cand" ] && ! is_ide_installation "$cand"; then
             echo "$cand"
             return 0
         fi
     done
+
+    # Fallback: if only one antigravity binary exists, return it
+    if command -v antigravity >/dev/null 2>&1; then
+        command -v antigravity
+        return 0
+    fi
 
     echo ""
 }
@@ -80,7 +142,7 @@ resolve_ide_install_dir() {
 
 diagnose_cockpit() {
     print_banner
-    echo "=== Cockpit Tools & Antigravity IDE Integration Diagnostics ==="
+    echo "=== Cockpit Tools & Antigravity Integration Diagnostics ==="
     echo ""
 
     local cockpit_bin
@@ -88,13 +150,13 @@ diagnose_cockpit() {
     if [ -n "$cockpit_bin" ]; then
         log_success "Cockpit Tools binary: $cockpit_bin"
     else
-        log_warn "Cockpit Tools application binary not found in standard paths"
+        log_warn "Cockpit Tools application binary not found in standard paths (/usr/bin/cockpit-tools)"
     fi
 
     local data_dir
     data_dir="$(get_cockpit_data_dir)"
     local config_file="$data_dir/config.json"
-    echo "Data Directory:       $data_dir"
+    echo "Cockpit Data Directory: $data_dir"
 
     local current_configured_path=""
     if [ -f "$config_file" ]; then
@@ -109,7 +171,7 @@ except Exception:
     pass
 ' 2>/dev/null || true)"
         if [ -n "$current_configured_path" ]; then
-            log_info "Configured IDE App Path: $current_configured_path"
+            log_info "Configured App Path (antigravity_app_path): $current_configured_path"
         else
             log_warn "antigravity_app_path is currently empty (relies on auto-discovery)"
         fi
@@ -118,27 +180,46 @@ except Exception:
     fi
 
     echo ""
-    echo "=== Executable & Discovery Checks ==="
-    local ide_exec
+    echo "=== Applications & Executable Checks ==="
+    local ide_exec desktop_exec
     ide_exec="$(resolve_ide_executable)"
+    desktop_exec="$(resolve_desktop_executable)"
+
     if [ -n "$ide_exec" ]; then
-        log_success "Resolved Antigravity IDE executable: $ide_exec"
+        log_success "Antigravity IDE executable:     $ide_exec"
     else
-        log_error "No Antigravity IDE executable found on this system!"
+        log_warn "Antigravity IDE executable not detected"
     fi
 
-    local ide_launcher
-    ide_launcher="$(command -v antigravity-ide 2>/dev/null || true)"
-    if [ -n "$ide_launcher" ]; then
-        log_success "Found 'antigravity-ide' launcher in PATH: $ide_launcher"
+    if [ -n "$desktop_exec" ]; then
+        log_success "Antigravity 2.0 Desktop executable: $desktop_exec"
     else
-        log_warn "'antigravity-ide' launcher NOT found in PATH! (Cockpit Tools strictly searches for 'antigravity-ide')"
+        log_warn "Antigravity 2.0 Desktop executable not detected"
+    fi
+
+    echo ""
+    echo "=== Cockpit Tools Launcher & Discovery Verification ==="
+    local ide_launcher desktop_launcher
+    ide_launcher="$(command -v antigravity-ide 2>/dev/null || true)"
+    desktop_launcher="$(command -v antigravity 2>/dev/null || true)"
+
+    if [ -n "$ide_launcher" ]; then
+        log_success "Launcher 'antigravity-ide' (required for IDE): $ide_launcher"
+    else
+        log_warn "Launcher 'antigravity-ide' NOT found in PATH! (Cockpit Tools strictly searches for 'antigravity-ide' when switching IDE accounts)"
+    fi
+
+    if [ -n "$desktop_launcher" ]; then
+        log_success "Launcher 'antigravity' (used for 2.0 Desktop):  $desktop_launcher"
+    else
+        log_warn "Launcher 'antigravity' NOT found in PATH!"
     fi
 
     local ide_dir
     ide_dir="$(resolve_ide_install_dir "$ide_exec")"
     if [ -n "$ide_dir" ] && [ -d "$ide_dir" ]; then
-        log_info "Antigravity installation root: $ide_dir"
+        echo ""
+        log_info "Antigravity IDE installation root: $ide_dir"
         if [ -e "$ide_dir/antigravity-ide" ] || [ -e "$ide_dir/bin/antigravity-ide" ]; then
             log_success "Cockpit Tools internal directory signature verified ($ide_dir)"
         else
@@ -147,7 +228,7 @@ except Exception:
     fi
 
     echo ""
-    echo "=== Storage & Database Status ==="
+    echo "=== SQLite Credentials & Database Status ==="
     local ide_db="$HOME/.config/Antigravity IDE/User/globalStorage/state.vscdb"
     local desktop_db="$HOME/.config/Antigravity/User/globalStorage/state.vscdb"
     
@@ -167,68 +248,132 @@ except Exception:
 }
 
 fix_cockpit_integration() {
-    print_banner
-    log_step "Fixing Cockpit Tools Integration for Antigravity IDE..."
+    local target="${1:-}"
 
-    local ide_exec
+    # If no target provided and running interactively, ask user
+    if [ -z "$target" ] && [ -t 0 ] && [ "${YES:-0}" -eq 0 ]; then
+        echo ""
+        echo -e "${BOLD}Select which application to connect with Cockpit Tools:${RESET}"
+        echo -e "  ${CYAN}1)${RESET} ${BOLD}Both (Unified Integration)${RESET} [Recommended] - Support switching in both IDE & 2.0"
+        echo -e "  ${CYAN}2)${RESET} ${BOLD}Antigravity IDE${RESET} (VS Code based AI coding environment)"
+        echo -e "  ${CYAN}3)${RESET} ${BOLD}Antigravity 2.0${RESET} (Desktop AI assistant app)"
+        echo ""
+        read -rp "Enter choice [1-3, default 1]: " user_target_choice
+        case "$user_target_choice" in
+            2|ide|IDE) target="ide" ;;
+            3|desktop|2.0|Desktop) target="desktop" ;;
+            *) target="both" ;;
+        esac
+    fi
+
+    [ -n "$target" ] || target="both"
+    # Normalize aliases
+    case "$target" in
+        all|both|unified) target="both" ;;
+        ide|vscode) target="ide" ;;
+        desktop|2.0|hub) target="desktop" ;;
+    esac
+
+    print_banner
+    log_step "Configuring Cockpit Tools Integration (Mode: $target)..."
+
+    local ide_exec desktop_exec
     ide_exec="$(resolve_ide_executable)"
-    if [ -z "$ide_exec" ]; then
-        log_error "Cannot fix Cockpit Tools: No Antigravity executable found."
-        log_info "Please install Antigravity IDE first using: ./agyist --ide"
+    desktop_exec="$(resolve_desktop_executable)"
+
+    if [ -z "$ide_exec" ] && [ -z "$desktop_exec" ]; then
+        log_error "Cannot configure Cockpit Tools: No Antigravity installation found."
+        log_info "Please install Antigravity IDE or 2.0 first using ./agyist"
         return 1
     fi
 
-    log_info "Using Antigravity IDE executable: $ide_exec"
+    local primary_path=""
+    if [ "$target" = "desktop" ]; then
+        primary_path="${desktop_exec:-$ide_exec}"
+    else
+        primary_path="${ide_exec:-$desktop_exec}"
+    fi
 
-    # 1. Ensure 'antigravity-ide' launcher exists in PATH
+    log_info "Resolved target executable: $primary_path"
+
+    # 1. Setup launchers & compatibility symlinks
     local launcher_installed=0
-    # Prefer /usr/local/bin if writable or sudo available
-    if [ "$(id -u)" -eq 0 ] || is_dir_writable "/usr/local/bin" || can_use_sudo; then
-        log_step "Ensuring /usr/local/bin/antigravity-ide symlink exists..."
-        if [ "$(id -u)" -eq 0 ] || is_dir_writable "/usr/local/bin"; then
-            ln -sf "$ide_exec" "/usr/local/bin/antigravity-ide"
-            launcher_installed=1
-        elif can_use_sudo; then
-            sudo ln -sf "$ide_exec" "/usr/local/bin/antigravity-ide"
-            launcher_installed=1
-        fi
-        [ "$launcher_installed" -eq 1 ] && log_success "Created /usr/local/bin/antigravity-ide"
-    fi
 
-    # Also ensure user-scope ~/.local/bin/antigravity-ide if writable
-    local user_bin="$HOME/.local/bin"
-    if [ -d "$user_bin" ] && is_dir_writable "$user_bin"; then
-        ln -sf "$ide_exec" "$user_bin/antigravity-ide"
-        log_success "Created $user_bin/antigravity-ide"
-        launcher_installed=1
-    elif mkdir -p "$user_bin" 2>/dev/null; then
-        ln -sf "$ide_exec" "$user_bin/antigravity-ide"
-        log_success "Created $user_bin/antigravity-ide"
-        launcher_installed=1
-    fi
-
-    # 2. Ensure internal install directory symlinks exist for Cockpit Tools directory verification
-    local ide_dir
-    ide_dir="$(resolve_ide_install_dir "$ide_exec")"
-    if [ -n "$ide_dir" ] && [ -d "$ide_dir" ]; then
-        if is_dir_writable "$ide_dir" || can_use_sudo; then
-            log_step "Creating directory signatures in $ide_dir for Cockpit Tools..."
-            local cmd_prefix=""
-            if [ "$(id -u)" -ne 0 ] && ! is_dir_writable "$ide_dir" && can_use_sudo; then
-                cmd_prefix="sudo "
+    # Ensure antigravity-ide launcher exists for IDE mode
+    if [ "$target" = "ide" ] || [ "$target" = "both" ]; then
+        local target_ide="${ide_exec:-$primary_path}"
+        if [ -n "$target_ide" ]; then
+            if [ "$(id -u)" -eq 0 ] || is_dir_writable "/usr/local/bin" || can_use_sudo; then
+                log_step "Ensuring /usr/local/bin/antigravity-ide launcher exists..."
+                if [ "$(id -u)" -eq 0 ] || is_dir_writable "/usr/local/bin"; then
+                    ln -sf "$target_ide" "/usr/local/bin/antigravity-ide"
+                    launcher_installed=1
+                elif can_use_sudo; then
+                    sudo ln -sf "$target_ide" "/usr/local/bin/antigravity-ide"
+                    launcher_installed=1
+                fi
+                [ "$launcher_installed" -eq 1 ] && log_success "Created /usr/local/bin/antigravity-ide"
             fi
 
-            if [ ! -e "$ide_dir/antigravity-ide" ]; then
-                $cmd_prefix ln -sf "$ide_exec" "$ide_dir/antigravity-ide" 2>/dev/null || true
+            local user_bin="$HOME/.local/bin"
+            if [ -d "$user_bin" ] && is_dir_writable "$user_bin"; then
+                ln -sf "$target_ide" "$user_bin/antigravity-ide"
+                log_success "Created $user_bin/antigravity-ide"
+            elif mkdir -p "$user_bin" 2>/dev/null; then
+                ln -sf "$target_ide" "$user_bin/antigravity-ide"
+                log_success "Created $user_bin/antigravity-ide"
             fi
-            if [ -d "$ide_dir/bin" ] && [ ! -e "$ide_dir/bin/antigravity-ide" ]; then
-                $cmd_prefix ln -sf "$ide_exec" "$ide_dir/bin/antigravity-ide" 2>/dev/null || true
-            fi
-            log_success "Directory signatures installed in $ide_dir"
         fi
     fi
 
-    # 3. Configure ~/.antigravity_cockpit/config.json
+    # Ensure 'antigravity' launcher exists for Desktop / general mode
+    if [ "$target" = "desktop" ] || [ "$target" = "both" ]; then
+        local target_desktop="${desktop_exec:-$primary_path}"
+        if [ -n "$target_desktop" ]; then
+            if [ ! -e "/usr/bin/antigravity" ] && [ ! -e "/usr/local/bin/antigravity" ]; then
+                if [ "$(id -u)" -eq 0 ] || is_dir_writable "/usr/local/bin"; then
+                    ln -sf "$target_desktop" "/usr/local/bin/antigravity"
+                    log_success "Created /usr/local/bin/antigravity"
+                elif can_use_sudo; then
+                    sudo ln -sf "$target_desktop" "/usr/local/bin/antigravity"
+                    log_success "Created /usr/local/bin/antigravity"
+                fi
+            fi
+
+            local user_bin="$HOME/.local/bin"
+            if [ ! -e "$user_bin/antigravity" ]; then
+                mkdir -p "$user_bin" 2>/dev/null || true
+                if [ -d "$user_bin" ] && is_dir_writable "$user_bin"; then
+                    ln -sf "$target_desktop" "$user_bin/antigravity"
+                    log_success "Created $user_bin/antigravity"
+                fi
+            fi
+        fi
+    fi
+
+    # 2. Setup internal directory signatures inside installation root
+    if [ -n "$ide_exec" ]; then
+        local ide_dir
+        ide_dir="$(resolve_ide_install_dir "$ide_exec")"
+        if [ -n "$ide_dir" ] && [ -d "$ide_dir" ]; then
+            if is_dir_writable "$ide_dir" || can_use_sudo; then
+                local cmd_prefix=""
+                if [ "$(id -u)" -ne 0 ] && ! is_dir_writable "$ide_dir" && can_use_sudo; then
+                    cmd_prefix="sudo "
+                fi
+
+                if [ ! -e "$ide_dir/antigravity-ide" ]; then
+                    $cmd_prefix ln -sf "$ide_exec" "$ide_dir/antigravity-ide" 2>/dev/null || true
+                fi
+                if [ -d "$ide_dir/bin" ] && [ ! -e "$ide_dir/bin/antigravity-ide" ]; then
+                    $cmd_prefix ln -sf "$ide_exec" "$ide_dir/bin/antigravity-ide" 2>/dev/null || true
+                fi
+                log_success "Installed Cockpit Tools directory signatures in $ide_dir"
+            fi
+        fi
+    fi
+
+    # 3. Update ~/.antigravity_cockpit/config.json
     local data_dir
     data_dir="$(get_cockpit_data_dir)"
     mkdir -p "$data_dir" 2>/dev/null || true
@@ -241,7 +386,7 @@ import json, os, sys
 
 data_dir = "'"$data_dir"'"
 config_path = os.path.join(data_dir, "config.json")
-ide_path = "'"$ide_exec"'"
+chosen_path = "'"$primary_path"'"
 
 data = {}
 if os.path.exists(config_path):
@@ -251,7 +396,7 @@ if os.path.exists(config_path):
     except Exception as e:
         data = {}
 
-data["antigravity_app_path"] = ide_path
+data["antigravity_app_path"] = chosen_path
 
 try:
     with open(config_path, "w", encoding="utf-8") as f:
@@ -262,28 +407,39 @@ except Exception as e:
 ' 2>/dev/null || echo "ERR: python update failed")"
 
         if [ "$update_res" = "OK" ]; then
-            log_success "Configured 'antigravity_app_path' -> $ide_exec in Cockpit Tools"
+            log_success "Updated 'antigravity_app_path' -> $primary_path in Cockpit Tools config"
         else
-            log_warn "Could not update config.json automatically: $update_res"
+            log_warn "Could not write to config.json automatically: $update_res"
         fi
     else
         log_info "Cockpit data directory ($data_dir) is not directly writable in this session."
     fi
 
-    # 4. Synchronize databases
+    # 4. Synchronize databases across 2.0 and IDE
     log_step "Synchronizing account credentials across Antigravity 2.0 and Antigravity IDE..."
-    sync_chat_storage || true
+    run_sync 0 || true
 
     echo ""
-    log_success "Cockpit Tools integration configuration complete!"
+    log_success "Cockpit Tools configuration complete!"
     echo ""
-    echo "=== Instructions for Cockpit Tools UI ==="
-    echo "1. If Cockpit Tools is running, restart it to load new PATH / settings."
-    echo "2. In Cockpit Tools UI, select 'Antigravity IDE' from the platform selector."
-    echo "3. If prompted for application path, set:"
-    echo "     Antigravity IDE Launch Path: $ide_exec"
-    echo "     (Make sure to specify the file '$ide_exec', NOT the folder)"
-    echo "4. The account switcher will now switch and inject tokens seamlessly."
+    echo "=== How Cockpit Tools Works With Both Versions ==="
+    echo "Cockpit Tools has native support for BOTH applications:"
+    echo "  • 'Antigravity IDE': Controls the VS Code AI environment (~/.config/Antigravity IDE)"
+    echo "  • 'Antigravity':     Controls the 2.0 Desktop agent app   (~/.config/Antigravity)"
+    echo ""
+    echo "=== In the Cockpit Tools UI ==="
+    echo "1. Restart Cockpit Tools so it reloads PATH and configurations."
+    if [ "$target" = "ide" ]; then
+        echo "2. Switch to 'Antigravity IDE' in Cockpit's platform selector (top-left or sidebar)."
+        echo "3. If prompted for Launch Path, enter: $ide_exec"
+    elif [ "$target" = "desktop" ]; then
+        echo "2. Switch to 'Antigravity' in Cockpit's platform selector."
+        echo "3. If prompted for Launch Path, enter: $desktop_exec"
+    else
+        echo "2. You can switch between 'Antigravity IDE' and 'Antigravity' at any time using"
+        echo "   the platform dropdown in Cockpit Tools."
+        echo "3. If prompted for Launch Path in IDE mode, enter: $primary_path"
+        echo "4. Accounts switched in either application will stay synchronized across both!"
+    fi
     echo ""
 }
-
