@@ -356,9 +356,9 @@ def create_backup_archive(output_tar: str = None) -> str:
                 log(f"Archiving [{tag}]: {path}")
                 def tar_filter(tarinfo):
                     # Skip massive cache/socket directories
-                    skip_patterns = ["/Cache/", "/CachedData/", "/GPUCache/", "/logs/", "lockfile", ".sock"]
+                    skip_patterns = ["/cache/", "/cacheddata/", "/gpucache/", "/logs/", "lockfile", ".sock", "browser_recordings"]
                     for pat in skip_patterns:
-                        if pat.lower() in tarinfo.name.lower():
+                        if pat in tarinfo.name.lower():
                             return None
                     return tarinfo
                 tar.add(path, arcname=f"data/{tag}", filter=tar_filter)
