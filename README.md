@@ -53,10 +53,21 @@
 
 ---
 
-## Quick Start
+## Installation & Deployment
 
-### 1. Interactive Terminal UI
-Run without arguments to launch the wizard:
+### 1. One-Line Remote Install (Any Linux Machine)
+Run this single command on any machine to download, install `agyist`, and launch the interactive setup:
+```bash
+curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash
+```
+
+To install both Antigravity IDE and Antigravity 2.0 Desktop unattended:
+```bash
+curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --all -y
+```
+
+### 2. Interactive Terminal UI
+When run locally without arguments, `agyist` presents an interactive terminal wizard:
 ```bash
 ./agyist
 ```
