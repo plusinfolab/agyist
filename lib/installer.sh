@@ -248,6 +248,12 @@ install_product() {
         create_cli_launcher "antigravity-desktop" "$installed_exec" "$bin_dir" "$install_dir"
     fi
 
+    # Ensure agyist CLI suite itself is available in PATH
+    if [ -f "$PROJECT_ROOT/agyist" ]; then
+        chmod +x "$PROJECT_ROOT/agyist"
+        ln -sfn "$PROJECT_ROOT/agyist" "$bin_dir/agyist" 2>/dev/null || true
+    fi
+
     # Install Desktop & Icon Integration
     log_step "Configuring desktop integration and application icons..."
     install_desktop_integration "$product" "$install_dir" "$bin_dir/$exec_name" "$scope"
