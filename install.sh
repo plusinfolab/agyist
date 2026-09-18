@@ -2,12 +2,12 @@
 # install.sh - One-line Bootstrap and Installer for Google Antigravity & Antigravity IDE
 #
 # Quick install:
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash
 #
 # With options:
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --ide
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --all
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --cockpit both
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash -s -- --ide
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash -s -- --all
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash -s -- --cockpit both
 
 set -euo pipefail
 
@@ -26,8 +26,8 @@ echo "==> Bootstrapping Antigravity Installer Suite (agyist)..."
 APP_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/agyist"
 mkdir -p "$APP_DATA"
 
-REPO_URL="${AGYIST_REPO_URL:-${AGYIST_GIT_URL:-https://github.com/meetsavani5657/agyist.git}}"
-TARBALL_URL="${AGYIST_TARBALL_URL:-https://github.com/meetsavani5657/agyist/archive/refs/heads/main.tar.gz}"
+REPO_URL="${AGYIST_REPO_URL:-${AGYIST_GIT_URL:-https://github.com/plusinfolab/agyist.git}}"
+TARBALL_URL="${AGYIST_TARBALL_URL:-https://github.com/plusinfolab/agyist/archive/refs/heads/main.tar.gz}"
 
 if [ -d "$APP_DATA/.git" ] && command -v git >/dev/null 2>&1; then
     echo "Updating existing agyist scripts..."
