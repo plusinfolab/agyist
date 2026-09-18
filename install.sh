@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# install.sh - One-line Bootstrap and Installer for Google Antigravity & Antigravity IDE
+# install.sh - Bootstrap and Installer for Google Antigravity & Antigravity IDE
 #
 # Quick install:
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash
 #
 # With options:
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --ide
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --all
-#   curl -fsSL https://raw.githubusercontent.com/meetsavani5657/agyist/main/install.sh | bash -s -- --cockpit both
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash -s -- --ide
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash -s -- --all
+#   curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash -s -- --cockpit both
 
 set -euo pipefail
 
@@ -26,8 +26,8 @@ echo "==> Bootstrapping Antigravity Installer Suite (agyist)..."
 APP_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/agyist"
 mkdir -p "$APP_DATA"
 
-REPO_URL="${AGYIST_REPO_URL:-${AGYIST_GIT_URL:-https://github.com/meetsavani5657/agyist.git}}"
-TARBALL_URL="${AGYIST_TARBALL_URL:-https://github.com/meetsavani5657/agyist/archive/refs/heads/main.tar.gz}"
+REPO_URL="${AGYIST_REPO_URL:-${AGYIST_GIT_URL:-https://github.com/plusinfolab/agyist.git}}"
+TARBALL_URL="${AGYIST_TARBALL_URL:-https://github.com/plusinfolab/agyist/archive/refs/heads/main.tar.gz}"
 
 if [ -d "$APP_DATA/.git" ] && command -v git >/dev/null 2>&1; then
     echo "Updating existing agyist scripts..."
@@ -35,7 +35,7 @@ if [ -d "$APP_DATA/.git" ] && command -v git >/dev/null 2>&1; then
 elif command -v git >/dev/null 2>&1; then
     echo "Fetching agyist repository..."
     git clone --depth 1 "$REPO_URL" "$APP_DATA" 2>/dev/null || {
-        echo "Git clone failed or repository not public yet, trying archive download..."
+        echo "Git clone failed (if private, ensure SSH or git credentials/gh auth are set). Trying archive fallback..."
         curl -fsSL "$TARBALL_URL" | tar -xz -C "$APP_DATA" --strip-components=1 2>/dev/null || true
     }
 elif command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
@@ -54,7 +54,7 @@ if [ -f "$APP_DATA/agyist" ]; then
 
     case ":$PATH:" in
         *":$HOME/.local/bin:"*) ;;
-        *) echo "Notice: $HOME/.local/bin is not in your current PATH. Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to ~/.bashrc" ;;
+        *) echo "Notice: $HOME/.local/bin is not in your current PATH. Add export PATH=\"\$HOME/.local/bin:\$PATH\" to ~/.bashrc" ;;
     esac
 
     exec "$APP_DATA/agyist" "$@"
