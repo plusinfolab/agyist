@@ -28,12 +28,13 @@ run_interactive_menu() {
     echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import / Restore${RESET} Brains & Chats from an Archive"
     echo -e "  ${CYAN}9)${RESET}  ${BOLD}Migrate${RESET} Legacy Antigravity Data -> Antigravity IDE"
     echo -e "  ${CYAN}10)${RESET} ${BOLD}Fix Cockpit Tools Account Switcher${RESET} (IDE / 2.0 / Both)"
-    echo -e "  ${CYAN}11)${RESET} View System Diagnostics & Installation Status"
-    echo -e "  ${CYAN}12)${RESET} Uninstall Antigravity"
-    echo -e "  ${CYAN}13)${RESET} Exit"
+    echo -e "  ${CYAN}11)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
+    echo -e "  ${CYAN}12)${RESET} View System Diagnostics & Installation Status"
+    echo -e "  ${CYAN}13)${RESET} Uninstall Antigravity"
+    echo -e "  ${CYAN}14)${RESET} Exit"
     echo ""
 
-    read -rp "Enter choice [1-13]: " choice
+    read -rp "Enter choice [1-14]: " choice
     case "$choice" in
         1)
             echo ""
@@ -101,9 +102,13 @@ run_interactive_menu() {
             ;;
         11)
             echo ""
-            show_system_status 0
+            self_update_agyist 0
             ;;
         12)
+            echo ""
+            show_system_status 0
+            ;;
+        13)
             echo ""
             read -rp "Are you sure you want to uninstall Antigravity? [y/N]: " confirm
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
@@ -112,7 +117,7 @@ run_interactive_menu() {
                 log_info "Uninstall cancelled."
             fi
             ;;
-        13|q|Q)
+        14|q|Q)
             echo "Exiting."
             exit 0
             ;;

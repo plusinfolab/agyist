@@ -440,8 +440,11 @@ def sync_bidirectional(dry_run: bool = False):
     
     # 1. Gemini Brains, Conversations & Assistant States
     if not dry_run:
-        os.makedirs(PATH_GEMINI_MAIN, exist_ok=True)
-        os.makedirs(PATH_GEMINI_IDE, exist_ok=True)
+        try:
+            os.makedirs(PATH_GEMINI_MAIN, exist_ok=True)
+            os.makedirs(PATH_GEMINI_IDE, exist_ok=True)
+        except OSError as e:
+            log(f"Warning: Could not create Gemini directories ({e}). Continuing with existing paths.", "WARN")
     
     for sub in ["brain", "conversations", "knowledge", "html_artifacts"]:
         dir_main = os.path.join(PATH_GEMINI_MAIN, sub)

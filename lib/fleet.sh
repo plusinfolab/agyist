@@ -230,3 +230,87 @@ remove_autoupdate() {
 
     log_success "Automated updates have been disabled."
 }
+self_update_agyist() {
+    local dry_run="${1:-0}"
+    log_step "Checking for updates to agyist CLI suite..."
+
+    local target_dir="$PROJECT_ROOT"
+    local repo_url="${AGYIST_REPO_URL:-https://github.com/plusinfolab/agyist.git}"
+    local tarball_url="${AGYIST_TARBALL_URL:-https://github.com/plusinfolab/agyist/archive/refs/heads/main.tar.gz}"
+
+    if [ "$dry_run" -eq 1 ]; then
+        log_info "[Dry-Run] Checking remote repository: $repo_url"
+        if [ -d "$target_dir/.git" ] && command -v git >/dev/null 2>&1; then
+            local current_commit
+            current_commit="$(git -C "$target_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+            log_info "[Dry-Run] Git repository at $target_dir (current commit: $current_commit)"
+        else
+            log_info "[Dry-Run] Standalone/tarball installation at $target_dir"
+        fi
+        log_success "[Dry-Run] Self-update check completed."
+        return 0
+    fi
+
+    if [ -d "$target_dir/.git" ] && command -v git >/dev/null 2>&1; then
+        log_info "Git repository detected at $target_dir. Pulling latest commits..."
+        local current_commit
+        current_commit="$(git -C "$target_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+
+        if git -C "$target_dir" pull --ff-only origin main 2>/dev/null; then
+            local new_commit
+            new_commit="$(git -C "$target_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+            if [ "$current_commit" = "$new_commit" ]; then
+                log_success "agyist is already at the latest version ($new_commit)."
+            else
+                log_success "agyist successfully updated from $current_commit to $new_commit!"
+            fi
+        else
+            log_warn "Fast-forward git pull was not possible. Trying standard pull..."
+            if git -C "$target_dir" pull --quiet origin main 2>/dev/null; then
+                local new_commit
+                new_commit="$(git -C "$target_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+                log_success "agyist updated to $new_commit!"
+            else
+                log_warn "Git pull failed (possibly private repo or detached state). Attempting archive download fallback..."
+                local tmp_archive
+                tmp_archive="$(mktemp "/tmp/agyist-update-XXXXXX.tar.gz" 2>/dev/null || echo "/tmp/agyist-update.tar.gz")"
+                if curl -fsSL "$tarball_url" -o "$tmp_archive" 2>/dev/null; then
+                    tar -xzf "$tmp_archive" -C "$target_dir" --strip-components=1
+                    rm -f "$tmp_archive"
+                    log_success "agyist updated successfully via archive fallback!"
+                else
+                    rm -f "$tmp_archive"
+                    log_error "Failed to update agyist from remote repository."
+                    return 1
+                fi
+            fi
+        fi
+    elif command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
+        log_info "Standalone installation detected. Downloading latest agyist release archive..."
+        local tmp_archive
+        tmp_archive="$(mktemp "/tmp/agyist-update-XXXXXX.tar.gz" 2>/dev/null || echo "/tmp/agyist-update.tar.gz")"
+        if curl -fsSL "$tarball_url" -o "$tmp_archive" 2>/dev/null; then
+            tar -xzf "$tmp_archive" -C "$target_dir" --strip-components=1
+            rm -f "$tmp_archive"
+            log_success "agyist updated successfully from archive!"
+        else
+            rm -f "$tmp_archive"
+            log_error "Failed to download agyist archive from $tarball_url"
+            return 1
+        fi
+    else
+        log_error "Neither git nor curl+tar is available to perform self-update."
+        return 1
+    fi
+
+    # Refresh launcher permissions and PATH links
+    chmod +x "$target_dir/agyist" "$target_dir/install.sh" 2>/dev/null || true
+    mkdir -p "$HOME/.local/bin" 2>/dev/null || true
+    ln -sfn "$target_dir/agyist" "$HOME/.local/bin/agyist" 2>/dev/null || true
+    if [ "$(id -u)" -eq 0 ] || [ -w "/usr/local/bin" ]; then
+        ln -sfn "$target_dir/agyist" "/usr/local/bin/agyist" 2>/dev/null || true
+    fi
+
+    log_success "agyist CLI launcher verified at $HOME/.local/bin/agyist"
+    return 0
+}

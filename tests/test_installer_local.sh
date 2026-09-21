@@ -36,4 +36,8 @@ echo "==> Testing Cockpit Tools Diagnostics..."
 "$PROJECT_ROOT/agyist" --diagnose-cockpit | grep "Cockpit Tools & Antigravity" >/dev/null || { echo "Cockpit diagnose test failed"; exit 1; }
 echo "✔ Cockpit diagnose test passed"
 
+echo "==> Testing Self-Update Dry-run..."
+"$PROJECT_ROOT/agyist" --self-update --dry-run | grep -q "Self-update check completed" || { echo "Self-update test failed"; exit 1; }
+echo "✔ Self-update dry-run test passed"
+
 echo "==> All automated tests passed successfully!"

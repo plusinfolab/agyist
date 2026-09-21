@@ -228,6 +228,24 @@ except Exception:
     fi
 
     echo ""
+    echo "=== Linux Secret Service & Keyring Status ==="
+    if command -v secret-tool >/dev/null 2>&1; then
+        local st_err
+        st_err="$(secret-tool search service antigravity 2>&1 || true)"
+        if [ -z "$st_err" ] || [[ "$st_err" =~ ^\[ ]]; then
+            log_success "Linux Secret Service (secret-tool & D-Bus keyring): Connected and active"
+        elif [[ "$st_err" =~ "No such file or directory" ]] || [[ "$st_err" =~ "Cannot autolaunch" ]]; then
+            log_warn "Linux Secret Service daemon (gnome-keyring / D-Bus) is not connected in this session!"
+            log_dim "  Cockpit Tools calls secret-tool for secure credential switching."
+            log_dim "  Fix: Run eval \$(gnome-keyring-daemon --start) or ensure your desktop session keyring is unlocked."
+        else
+            log_info "Linux Secret Service (secret-tool): Available"
+        fi
+    else
+        log_warn "secret-tool not found in PATH. Install with: sudo apt install libsecret-tools"
+    fi
+
+    echo ""
     echo "=== SQLite Credentials & Database Status ==="
     local ide_db="$HOME/.config/Antigravity IDE/User/globalStorage/state.vscdb"
     local desktop_db="$HOME/.config/Antigravity/User/globalStorage/state.vscdb"
@@ -370,6 +388,14 @@ fix_cockpit_integration() {
                 fi
                 log_success "Installed Cockpit Tools directory signatures in $ide_dir"
             fi
+
+            # User-scope discovery bridge (~/.local/share/antigravity-ide)
+            local user_share_ide="$HOME/.local/share/antigravity-ide"
+            mkdir -p "$HOME/.local/share" 2>/dev/null || true
+            if [ ! -e "$user_share_ide" ]; then
+                ln -sfn "$ide_dir" "$user_share_ide" 2>/dev/null || true
+                log_success "Created user-scope discovery link: $user_share_ide -> $ide_dir"
+            fi
         fi
     fi
 
@@ -377,6 +403,17 @@ fix_cockpit_integration() {
     local data_dir
     data_dir="$(get_cockpit_data_dir)"
     mkdir -p "$data_dir" 2>/dev/null || true
+
+    # Compatibility link for legacy Cockpit Tools versions (~/.antigravity_tools)
+    local legacy_tools_dir="$HOME/.antigravity_tools"
+    if [ ! -e "$legacy_tools_dir" ] && [ -d "$data_dir" ]; then
+        ln -sfn "$data_dir" "$legacy_tools_dir" 2>/dev/null || true
+    fi
+
+    # Attempt to initialize Secret Service daemon if present
+    if command -v gnome-keyring-daemon >/dev/null 2>&1; then
+        eval "$(gnome-keyring-daemon --start 2>/dev/null)" || true
+    fi
 
     if [ -d "$data_dir" ] && is_dir_writable "$data_dir"; then
         log_step "Updating Cockpit Tools configuration ($data_dir/config.json)..."

@@ -111,6 +111,7 @@ sudo ./agyist --all --system
 | `./agyist --all` | Install / update both applications |
 | `./agyist --upgrade` | One-click upgrade for all currently installed components |
 | `./agyist --check-update` | Check for updates (exit `0`: up to date, `10`: update available) |
+| `./agyist --self-update` | Update agyist CLI suite itself from remote GitHub repository |
 | `./agyist --sync` | Bi-directionally synchronize chats, brains & state (2.0 <-> IDE) |
 | `./agyist --bundle [file]` | Generate standalone offline deployment bundle for office machines |
 | `./agyist --setup-autoupdate` | Configure automated daily/weekly background updates (systemd/cron) |

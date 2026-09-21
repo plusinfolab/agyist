@@ -60,6 +60,7 @@ Fleet & Enterprise Automation:
   --setup-autoupdate      Configure automated daily/weekly background updates (systemd/cron)
   --remove-autoupdate     Disable automated background updates
   --check-update          Check if updates are available (exit 0: current, 10: update available)
+  --self-update           Update agyist CLI suite itself from remote repository
 
 Integrations & Third-Party Tools:
   --cockpit, --fix-cockpit Configure & fix Cockpit Tools account switcher for Antigravity IDE
@@ -122,6 +123,7 @@ DO_COCKPIT=0
 COCKPIT_TARGET=""
 DO_DIAGNOSE_COCKPIT=0
 DO_UNINSTALL=0
+DO_SELF_UPDATE=0
 TARGET_DIR=""
 SCOPE="auto"
 FORCE=0
@@ -154,6 +156,9 @@ while [ $# -gt 0 ]; do
             ;;
         --upgrade|--update|update|upgrade)
             DO_UPGRADE=1
+            ;;
+        --self-update|--update-self|--update-agyist)
+            DO_SELF_UPDATE=1
             ;;
         --check-update|check-update)
             DO_CHECK_UPDATE=1
@@ -357,7 +362,13 @@ if [ "$DO_UNINSTALL" -eq 1 ]; then
     exit 0
 fi
 
+if [ "$DO_SELF_UPDATE" -eq 1 ]; then
+    self_update_agyist "$DRY_RUN"
+    exit 0
+fi
+
 if [ "$DO_UPGRADE" -eq 1 ]; then
+    self_update_agyist "$DRY_RUN" 2>/dev/null || true
     upgrade_all_installations "$FORCE" "$SCOPE"
     exit 0
 fi

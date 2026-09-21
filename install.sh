@@ -11,15 +11,45 @@
 
 set -euo pipefail
 
+detect_shell_rc() {
+    if [ -n "${ZSH_VERSION:-}" ] || [ "$(basename "${SHELL:-}")" = "zsh" ]; then
+        echo "~/.zshrc"
+    else
+        echo "~/.bashrc"
+    fi
+}
+
 # Ensure ~/.local/bin is configured in user shell profiles
 ensure_path_configured() {
     local bin_dir="$HOME/.local/bin"
     mkdir -p "$bin_dir" 2>/dev/null || true
     for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-        if [ -f "$rc" ] && ! grep -qs "\.local/bin" "$rc"; then
-            echo -e "\n# Antigravity CLI Suite (agyist)\nexport PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$rc"
+        if [ -f "$rc" ] && [ -w "$rc" ] && ! grep -qs "\.local/bin" "$rc"; then
+            echo -e "\n# Antigravity CLI Suite (agyist)\nexport PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$rc" 2>/dev/null || true
         fi
     done
+}
+
+show_post_install_box() {
+    local rc_file
+    rc_file="$(detect_shell_rc)"
+    echo ""
+    echo "=================================================================="
+    echo "  ✔ agyist CLI suite installed successfully!"
+    echo "  Binary location: $HOME/.local/bin/agyist"
+    echo ""
+    echo "  To start using agyist in this terminal session right now, run:"
+    echo "     source $rc_file"
+    echo ""
+    echo "  Then run agyist from any terminal:"
+    echo "     agyist               # Launch interactive setup wizard"
+    echo "     agyist --ide         # Install / update Antigravity IDE"
+    echo "     agyist --all         # Install both IDE and 2.0 Desktop"
+    echo "     agyist --sync        # Sync chats, brains and state"
+    echo "     agyist --cockpit     # Configure Cockpit Tools integration"
+    echo "     agyist --self-update # Update agyist itself to latest version"
+    echo "=================================================================="
+    echo ""
 }
 
 # 1. If running from within an existing checkout of agyist
@@ -41,7 +71,7 @@ fi
 echo "==> Bootstrapping Antigravity Installer Suite (agyist)..."
 
 APP_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/agyist"
-mkdir -p "$APP_DATA"
+mkdir -p "$APP_DATA" 2>/dev/null || true
 
 REPO_URL="${AGYIST_REPO_URL:-${AGYIST_GIT_URL:-https://github.com/plusinfolab/agyist.git}}"
 TARBALL_URL="${AGYIST_TARBALL_URL:-https://github.com/plusinfolab/agyist/archive/refs/heads/main.tar.gz}"
@@ -72,30 +102,20 @@ if [ -f "$APP_DATA/agyist" ]; then
         ln -sfn "$APP_DATA/agyist" "/usr/local/bin/agyist" 2>/dev/null || true
     fi
 
-    echo "✔ agyist command installed successfully to $HOME/.local/bin/agyist"
-
     # If explicit CLI arguments were passed, execute them directly
     if [ $# -gt 0 ]; then
         exec "$APP_DATA/agyist" "$@"
     fi
 
-    # If no arguments were passed:
-    # Check if we can attach to an interactive terminal (/dev/tty)
+    show_post_install_box
+
+    # If interactive terminal is attached (/dev/tty), launch wizard
     if [ -t 0 ]; then
         exec "$APP_DATA/agyist"
     elif [ -c /dev/tty ] && [ -r /dev/tty ]; then
         echo "Launching interactive Antigravity installer..."
         exec "$APP_DATA/agyist" < /dev/tty
     else
-        echo ""
-        echo "=========================================================="
-        echo "  agyist is now installed and ready on this device!"
-        echo "=========================================================="
-        echo "  Run agyist in any terminal to open the wizard."
-        echo "  Or run: agyist --ide      (Install Antigravity IDE)"
-        echo "          agyist --desktop  (Install Antigravity 2.0)"
-        echo "          agyist --all      (Install both)"
-        echo "=========================================================="
         exit 0
     fi
 fi
