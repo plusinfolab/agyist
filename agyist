@@ -73,7 +73,8 @@ Fleet & Enterprise Automation:
 
 Integrations & Third-Party Tools:
   --account, --verify-account Show active account status & verify Cockpit/IDE sync
-  --cockpit, --fix-cockpit Configure & fix Cockpit Tools account switcher for Antigravity IDE
+  --cockpit [ide|desktop|both] Configure Cockpit Tools account switcher & launch path
+  --restart-cockpit        Restart running Cockpit Tools daemon to reload configurations
   --diagnose-cockpit       Diagnose Cockpit Tools integration & path configuration
   --desktop-entry          Install Linux desktop launchers & URL protocol handlers (antigravity://)
 
@@ -132,6 +133,7 @@ IMPORT_PATH=""
 DO_MIGRATE=0
 DO_COCKPIT=0
 COCKPIT_TARGET=""
+DO_RESTART_COCKPIT=0
 DO_DIAGNOSE_COCKPIT=0
 DO_ACCOUNT=0
 DO_WATCH=0
@@ -233,6 +235,9 @@ while [ $# -gt 0 ]; do
             ;;
         --diagnose-cockpit)
             DO_DIAGNOSE_COCKPIT=1
+            ;;
+        --restart-cockpit)
+            DO_RESTART_COCKPIT=1
             ;;
         --account|--verify-account|--verify-switch|account)
             DO_ACCOUNT=1
@@ -402,6 +407,13 @@ fi
 
 if [ "$DO_COCKPIT" -eq 1 ]; then
     fix_cockpit_integration "$COCKPIT_TARGET"
+    exit 0
+fi
+
+if [ "$DO_RESTART_COCKPIT" -eq 1 ]; then
+    # shellcheck source=lib/cockpit.sh
+    source "$SCRIPT_DIR/cockpit.sh"
+    restart_cockpit_tools
     exit 0
 fi
 

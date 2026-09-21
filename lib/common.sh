@@ -53,41 +53,95 @@ detect_arch() {
     esac
 }
 
-# Detect existing installations
+# Extract installed Antigravity version from directory or binary path
+get_installed_version() {
+    local path="${1:-}"
+    [ -n "$path" ] || { echo "0.0.0"; return 0; }
+    local dir="$path"
+    if [ -f "$path" ]; then
+        local real
+        real="$(readlink -f "$path" 2>/dev/null || echo "$path")"
+        dir="$(dirname "$real")"
+        [ "$(basename "$dir")" = "bin" ] && dir="$(dirname "$dir")"
+    fi
+
+    if [ -f "$dir/.antigravity-version" ]; then
+        cat "$dir/.antigravity-version" 2>/dev/null | tr -d '[:space:]'
+        return 0
+    fi
+    if [ -f "$dir/resources/app/product.json" ]; then
+        local ver
+        ver="$(grep -oE '"ideVersion": *"[^"]+"' "$dir/resources/app/product.json" 2>/dev/null | head -n 1 | awk -F'"' '{print $4}' || true)"
+        if [ -n "$ver" ]; then
+            echo "$ver"
+            return 0
+        fi
+    fi
+    if [ -f "$dir/resources/app/package.json" ]; then
+        local ver
+        ver="$(grep -oE '"version": *"[^"]+"' "$dir/resources/app/package.json" 2>/dev/null | head -n 1 | awk -F'"' '{print $4}' || true)"
+        if [ -n "$ver" ]; then
+            echo "$ver"
+            return 0
+        fi
+    fi
+    echo "0.0.0"
+}
+
+# Returns 0 if ver1 >= ver2, 1 if ver1 < ver2
+version_ge() {
+    local v1="${1:-0}" v2="${2:-0}"
+    python3 -c "
+import sys
+def parse_v(s):
+    parts = []
+    for p in s.replace('v', '').strip().split('.'):
+        num = ''
+        for c in p:
+            if c.isdigit(): num += c
+            else: break
+        parts.append(int(num) if num else 0)
+    return parts
+v1 = parse_v(sys.argv[1])
+v2 = parse_v(sys.argv[2])
+sys.exit(0 if v1 >= v2 else 1)
+" "$v1" "$v2" 2>/dev/null
+}
+
+# Detect existing installations, prioritizing newer and user-writable builds
 detect_existing_installations() {
-    local detected=()
+    local candidates=()
 
-    # 1. Check /usr/share/antigravity (matches current system)
-    if [ -d "/usr/share/antigravity" ] && [ -x "/usr/share/antigravity/antigravity" ]; then
-        detected+=("ide:/usr/share/antigravity")
+    # When non-root and sudo unavailable, check user-space installations first
+    if [ "$(id -u)" -ne 0 ] && ! can_use_sudo; then
+        # User space installations
+        [ -d "$HOME/.local/share/antigravity-ide" ] && candidates+=("ide:$HOME/.local/share/antigravity-ide")
+        [ -d "$HOME/.local/share/antigravity" ] && candidates+=("desktop:$HOME/.local/share/antigravity")
+        # System space installations
+        [ -d "/opt/antigravity-ide" ] && candidates+=("ide:/opt/antigravity-ide")
+        [ -d "/opt/antigravity" ] && candidates+=("desktop:/opt/antigravity")
+        [ -d "/usr/share/antigravity-ide" ] && candidates+=("ide:/usr/share/antigravity-ide")
+        [ -d "/usr/share/antigravity" ] && [ -x "/usr/share/antigravity/antigravity" ] && candidates+=("ide:/usr/share/antigravity")
+    else
+        # Standard priority when root/sudo available
+        [ -d "$HOME/.local/share/antigravity-ide" ] && candidates+=("ide:$HOME/.local/share/antigravity-ide")
+        [ -d "$HOME/.local/share/antigravity" ] && candidates+=("desktop:$HOME/.local/share/antigravity")
+        [ -d "/opt/antigravity-ide" ] && candidates+=("ide:/opt/antigravity-ide")
+        [ -d "/opt/antigravity" ] && candidates+=("desktop:/opt/antigravity")
+        [ -d "/usr/share/antigravity-ide" ] && candidates+=("ide:/usr/share/antigravity-ide")
+        [ -d "/usr/share/antigravity" ] && [ -x "/usr/share/antigravity/antigravity" ] && candidates+=("ide:/usr/share/antigravity")
     fi
 
-    # 2. Check /usr/share/antigravity-ide
-    if [ -d "/usr/share/antigravity-ide" ] && ([ -x "/usr/share/antigravity-ide/antigravity-ide" ] || [ -x "/usr/share/antigravity-ide/antigravity" ]); then
-        detected+=("ide:/usr/share/antigravity-ide")
-    fi
+    # Deduplicate and sort by version (highest version first)
+    local sorted=()
+    for item in "${candidates[@]}"; do
+        [ -n "$item" ] || continue
+        local ipath="${item#*:}"
+        [ -e "$ipath" ] || continue
+        sorted+=("$item")
+    done
 
-    # 3. Check /opt/antigravity-ide
-    if [ -d "/opt/antigravity-ide" ] && ([ -x "/opt/antigravity-ide/antigravity-ide" ] || [ -x "/opt/antigravity-ide/Antigravity-IDE/antigravity-ide" ]); then
-        detected+=("ide:/opt/antigravity-ide")
-    fi
-
-    # 4. Check /opt/antigravity (Desktop 2.0 or IDE)
-    if [ -d "/opt/antigravity" ] && [ -x "/opt/antigravity/antigravity" ]; then
-        detected+=("desktop:/opt/antigravity")
-    fi
-
-    # 5. Check ~/.local/share/antigravity-ide
-    if [ -d "$HOME/.local/share/antigravity-ide" ]; then
-        detected+=("ide:$HOME/.local/share/antigravity-ide")
-    fi
-
-    # 6. Check ~/.local/share/antigravity
-    if [ -d "$HOME/.local/share/antigravity" ]; then
-        detected+=("desktop:$HOME/.local/share/antigravity")
-    fi
-
-    printf '%s\n' "${detected[@]:-}"
+    printf '%s\n' "${sorted[@]:-}"
 }
 
 # Test if a directory or its parent is writable

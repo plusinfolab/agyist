@@ -202,3 +202,4 @@ remove_watch_service() {
         log_info "Service file was not present."
     fi
 }
+

@@ -48,41 +48,53 @@ is_ide_installation() {
 }
 
 resolve_ide_executable() {
-    # 1. Check PATH for explicit 'antigravity-ide'
+    # 1. Check user-installed IDE first (latest build in ~/.local)
+    local user_ide="$HOME/.local/share/antigravity-ide"
+    if [ -x "$user_ide/antigravity-ide" ] && is_ide_installation "$user_ide"; then
+        echo "$user_ide/antigravity-ide"
+        return 0
+    elif [ -x "$user_ide/bin/antigravity-ide" ] && is_ide_installation "$user_ide"; then
+        echo "$user_ide/bin/antigravity-ide"
+        return 0
+    elif [ -x "$HOME/.local/bin/antigravity-ide" ]; then
+        echo "$HOME/.local/bin/antigravity-ide"
+        return 0
+    fi
+
+    # 2. Check explicit antigravity-ide in PATH
     if command -v antigravity-ide >/dev/null 2>&1; then
         command -v antigravity-ide
         return 0
     fi
 
-    # 2. Check /usr/share/antigravity (standard IDE location)
-    if [ -x "/usr/share/antigravity/bin/antigravity" ] && is_ide_installation "/usr/share/antigravity"; then
-        echo "/usr/share/antigravity/bin/antigravity"
-        return 0
-    elif [ -x "/usr/share/antigravity/antigravity" ] && is_ide_installation "/usr/share/antigravity"; then
-        echo "/usr/share/antigravity/antigravity"
-        return 0
-    fi
+    # 3. Check candidate executables and select the highest version build (avoiding obsolete < 2.0 builds)
+    local best_exec=""
+    local best_ver="0.0.0"
 
-    # 3. Check /usr/bin/antigravity
-    if [ -x "/usr/bin/antigravity" ] && is_ide_installation "/usr/bin/antigravity"; then
-        echo "/usr/bin/antigravity"
-        return 0
-    fi
-
-    # 4. Check user local dirs
     for cand in \
         "$HOME/.local/share/antigravity-ide/bin/antigravity-ide" \
-        "$HOME/.local/share/antigravity-ide/antigravity" \
-        "$HOME/.local/bin/antigravity-ide" \
-        "$HOME/.local/share/antigravity/bin/antigravity" \
-        "$HOME/.local/share/antigravity/antigravity" \
+        "$HOME/.local/share/antigravity-ide/antigravity-ide" \
         "/opt/antigravity-ide/bin/antigravity-ide" \
-        "/opt/antigravity/bin/antigravity"; do
+        "/opt/antigravity-ide/antigravity-ide" \
+        "/usr/share/antigravity-ide/bin/antigravity-ide" \
+        "/usr/share/antigravity-ide/antigravity-ide" \
+        "/usr/share/antigravity/bin/antigravity" \
+        "/usr/share/antigravity/antigravity" \
+        "/usr/bin/antigravity"; do
         if [ -x "$cand" ] && is_ide_installation "$cand"; then
-            echo "$cand"
-            return 0
+            local cand_ver
+            cand_ver="$(get_installed_version "$cand")"
+            if [ -z "$best_exec" ] || version_ge "$cand_ver" "$best_ver"; then
+                best_exec="$cand"
+                best_ver="$cand_ver"
+            fi
         fi
     done
+
+    if [ -n "$best_exec" ]; then
+        echo "$best_exec"
+        return 0
+    fi
 
     # Fallback to any antigravity launcher
     if command -v antigravity >/dev/null 2>&1; then
@@ -94,27 +106,45 @@ resolve_ide_executable() {
 }
 
 resolve_desktop_executable() {
-    # 1. Check explicit desktop launcher
-    if command -v antigravity-desktop >/dev/null 2>&1; then
+    # 1. Check user-installed Antigravity 2.0 Desktop first
+    local user_desktop="$HOME/.local/share/antigravity"
+    if [ -x "$user_desktop/antigravity" ] && ! is_ide_installation "$user_desktop"; then
+        echo "$user_desktop/antigravity"
+        return 0
+    elif [ -x "$user_desktop/bin/antigravity" ] && ! is_ide_installation "$user_desktop"; then
+        echo "$user_desktop/bin/antigravity"
+        return 0
+    fi
+
+    # 2. Check explicit desktop launcher
+    if [ -x "$HOME/.local/bin/antigravity-desktop" ]; then
+        echo "$HOME/.local/bin/antigravity-desktop"
+        return 0
+    elif command -v antigravity-desktop >/dev/null 2>&1; then
         command -v antigravity-desktop
         return 0
     fi
 
-    # 2. Check non-IDE install locations
+    # 3. Check ~/.local/bin/antigravity IF it is not an IDE wrapper
+    if [ -x "$HOME/.local/bin/antigravity" ] && ! is_ide_installation "$HOME/.local/bin/antigravity"; then
+        echo "$HOME/.local/bin/antigravity"
+        return 0
+    fi
+
+    # 4. Check system non-IDE locations
     for cand in \
-        "$HOME/.local/share/antigravity/antigravity" \
         "/opt/antigravity/antigravity" \
-        "/usr/share/antigravity-desktop/antigravity" \
-        "/usr/bin/antigravity"; do
+        "/opt/antigravity/bin/antigravity" \
+        "/usr/share/antigravity-desktop/antigravity"; do
         if [ -x "$cand" ] && ! is_ide_installation "$cand"; then
             echo "$cand"
             return 0
         fi
     done
 
-    # Fallback: if only one antigravity binary exists, return it
-    if command -v antigravity >/dev/null 2>&1; then
-        command -v antigravity
+    # 5. Check /usr/bin/antigravity ONLY IF it is not an IDE installation
+    if [ -x "/usr/bin/antigravity" ] && ! is_ide_installation "/usr/bin/antigravity"; then
+        echo "/usr/bin/antigravity"
         return 0
     fi
 
@@ -171,7 +201,15 @@ except Exception:
     pass
 ' 2>/dev/null || true)"
         if [ -n "$current_configured_path" ]; then
-            log_info "Configured App Path (antigravity_app_path): $current_configured_path"
+            local path_ver
+            path_ver="$(get_installed_version "$current_configured_path")"
+            log_info "Configured App Path (antigravity_app_path): $current_configured_path (version: $path_ver)"
+            if [[ "$current_configured_path" =~ /usr/share/antigravity ]] || ! version_ge "$path_ver" "2.0.0"; then
+                log_warn "WARNING: Cockpit is currently configured to launch an outdated Antigravity build ($path_ver)!"
+                log_info "Fix this by running: ./agyist --cockpit ide (or ./agyist --cockpit desktop)"
+            else
+                log_success "Cockpit launch path is modern ($path_ver)"
+            fi
         else
             log_warn "antigravity_app_path is currently empty (relies on auto-discovery)"
         fi
@@ -186,13 +224,17 @@ except Exception:
     desktop_exec="$(resolve_desktop_executable)"
 
     if [ -n "$ide_exec" ]; then
-        log_success "Antigravity IDE executable:     $ide_exec"
+        local ide_ver
+        ide_ver="$(get_installed_version "$ide_exec")"
+        log_success "Antigravity IDE executable:     $ide_exec (version: $ide_ver)"
     else
         log_warn "Antigravity IDE executable not detected"
     fi
 
     if [ -n "$desktop_exec" ]; then
-        log_success "Antigravity 2.0 Desktop executable: $desktop_exec"
+        local desk_ver
+        desk_ver="$(get_installed_version "$desktop_exec")"
+        log_success "Antigravity 2.0 Desktop executable: $desktop_exec (version: $desk_ver)"
     else
         log_warn "Antigravity 2.0 Desktop executable not detected"
     fi
@@ -265,6 +307,23 @@ show_account_status() {
         python3 "$PROJECT_ROOT/lib/migrator.py" --account --json
     else
         python3 "$PROJECT_ROOT/lib/migrator.py" --account
+    fi
+}
+
+restart_cockpit_tools() {
+    if pgrep -f cockpit-tools >/dev/null 2>&1; then
+        log_step "Restarting Cockpit Tools daemon to reload configuration..."
+        pkill -f cockpit-tools 2>/dev/null || true
+        sleep 1
+        if command -v cockpit-tools >/dev/null 2>&1; then
+            nohup "$(command -v cockpit-tools)" >/dev/null 2>&1 &
+            log_success "Cockpit Tools restarted with updated launcher path!"
+        elif [ -x "/usr/bin/cockpit-tools" ]; then
+            nohup /usr/bin/cockpit-tools >/dev/null 2>&1 &
+            log_success "Cockpit Tools restarted with updated launcher path!"
+        fi
+    else
+        log_info "Cockpit Tools is not currently running. Next launch will use updated configuration."
     fi
 }
 
@@ -394,25 +453,34 @@ fix_cockpit_integration() {
 
             # User-scope zero-root discovery root (~/.local/share/antigravity-ide)
             local user_share_ide="$HOME/.local/share/antigravity-ide"
-            mkdir -p "$HOME/.local/share" 2>/dev/null || true
-            if [ -L "$user_share_ide" ]; then
-                rm -f "$user_share_ide" 2>/dev/null || true
-            fi
-            mkdir -p "$user_share_ide/bin" 2>/dev/null || true
-            if [ -d "$user_share_ide" ]; then
-                for entry in "$ide_dir"/*; do
-                    local base
-                    base="$(basename "$entry")"
-                    [ "$base" = "bin" ] && continue
-                    [ "$base" = "antigravity-ide" ] && continue
-                    [ -e "$entry" ] && ln -sfn "$entry" "$user_share_ide/$base" 2>/dev/null || true
-                done
-                ln -sf "$primary_path" "$user_share_ide/antigravity-ide" 2>/dev/null || true
-                ln -sf "$primary_path" "$user_share_ide/bin/antigravity-ide" 2>/dev/null || true
-                if [ -f "$ide_dir/bin/antigravity" ]; then
-                    ln -sf "$ide_dir/bin/antigravity" "$user_share_ide/bin/antigravity" 2>/dev/null || true
+            if [ "$ide_dir" != "$user_share_ide" ]; then
+                mkdir -p "$HOME/.local/share" 2>/dev/null || true
+                if [ -L "$user_share_ide" ]; then
+                    rm -f "$user_share_ide" 2>/dev/null || true
                 fi
-                log_success "Created zero-root Cockpit discovery root: $user_share_ide"
+                mkdir -p "$user_share_ide/bin" 2>/dev/null || true
+                if [ -d "$user_share_ide" ]; then
+                    for entry in "$ide_dir"/*; do
+                        local base
+                        base="$(basename "$entry")"
+                        [ "$base" = "bin" ] && continue
+                        [ "$base" = "antigravity-ide" ] && continue
+                        [ -e "$entry" ] && ln -sfn "$entry" "$user_share_ide/$base" 2>/dev/null || true
+                    done
+                    ln -sf "$ide_exec" "$user_share_ide/antigravity-ide" 2>/dev/null || true
+                    ln -sf "$ide_exec" "$user_share_ide/bin/antigravity-ide" 2>/dev/null || true
+                    if [ -f "$ide_dir/bin/antigravity" ]; then
+                        ln -sf "$ide_dir/bin/antigravity" "$user_share_ide/bin/antigravity" 2>/dev/null || true
+                    fi
+                    log_success "Created zero-root Cockpit discovery root: $user_share_ide"
+                fi
+            else
+                # When ~/.local/share/antigravity-ide is the genuine install directory, ensure bin/antigravity-ide signature exists
+                mkdir -p "$user_share_ide/bin" 2>/dev/null || true
+                if [ ! -e "$user_share_ide/bin/antigravity-ide" ] && [ -x "$user_share_ide/antigravity-ide" ]; then
+                    ln -sf "$user_share_ide/antigravity-ide" "$user_share_ide/bin/antigravity-ide" 2>/dev/null || true
+                fi
+                log_success "Verified user installation discovery root: $user_share_ide"
             fi
         fi
     fi
@@ -474,6 +542,22 @@ except Exception as e:
     log_step "Synchronizing account credentials across Antigravity 2.0 and Antigravity IDE..."
     run_sync 0 || true
 
+    # 5. Offer/trigger Cockpit Tools restart if running
+    if pgrep -f cockpit-tools >/dev/null 2>&1; then
+        echo ""
+        log_info "Cockpit Tools is currently running (PID: $(pgrep -f cockpit-tools | head -n 1))."
+        if [ "${YES:-0}" -eq 1 ] || [ ! -t 0 ]; then
+            restart_cockpit_tools
+        else
+            read -rp "Restart Cockpit Tools now to reload the new configuration? [Y/n]: " restart_choice
+            if [[ ! "$restart_choice" =~ ^[Nn]$ ]]; then
+                restart_cockpit_tools
+            else
+                log_info "Please remember to restart Cockpit Tools manually to apply the new launcher path."
+            fi
+        fi
+    fi
+
     echo ""
     log_success "Cockpit Tools configuration complete!"
     echo ""
@@ -483,7 +567,7 @@ except Exception as e:
     echo "  • 'Antigravity':     Controls the 2.0 Desktop agent app   (~/.config/Antigravity)"
     echo ""
     echo "=== In the Cockpit Tools UI ==="
-    echo "1. Restart Cockpit Tools so it reloads PATH and configurations."
+    echo "1. Cockpit Tools is now aligned to launch: $primary_path"
     if [ "$target" = "ide" ]; then
         echo "2. Switch to 'Antigravity IDE' in Cockpit's platform selector (top-left or sidebar)."
         echo "3. If prompted for Launch Path, enter: $ide_exec"

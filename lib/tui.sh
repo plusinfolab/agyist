@@ -175,12 +175,23 @@ status['system'] = {
 
 # Installations
 installs = []
-for p in ['/usr/share/antigravity', '/usr/share/antigravity-ide', '/opt/antigravity', '/opt/antigravity-ide', os.path.expanduser('~/.local/share/antigravity'), os.path.expanduser('~/.local/share/antigravity-ide')]:
+paths = [os.path.expanduser('~/.local/share/antigravity-ide'), os.path.expanduser('~/.local/share/antigravity'), '/opt/antigravity-ide', '/opt/antigravity', '/usr/share/antigravity-ide', '/usr/share/antigravity']
+for p in paths:
     if os.path.exists(p):
         v = 'unknown'
         vf = os.path.join(p, '.antigravity-version')
         if os.path.exists(vf):
             v = open(vf).read().strip()
+        elif os.path.exists(os.path.join(p, 'resources', 'app', 'product.json')):
+            try:
+                pj = json.load(open(os.path.join(p, 'resources', 'app', 'product.json')))
+                v = pj.get('ideVersion', pj.get('version', 'unknown'))
+            except Exception: pass
+        elif os.path.exists(os.path.join(p, 'resources', 'app', 'package.json')):
+            try:
+                pj = json.load(open(os.path.join(p, 'resources', 'app', 'package.json')))
+                v = pj.get('version', 'unknown')
+            except Exception: pass
         installs.append({'path': p, 'version': v})
 status['installations'] = installs
 
@@ -213,13 +224,13 @@ print(json.dumps(status, indent=2))
             [ -n "$line" ] || continue
             local type="${line%%:*}"
             local path="${line#*:}"
-            local ver="unknown"
-            if [ -f "$path/.antigravity-version" ]; then
-                ver="$(cat "$path/.antigravity-version" 2>/dev/null | tr -d '[:space:]')"
-            elif [ -f "$path/resources/app/package.json" ]; then
-                ver="$(grep -oE '"version": *"[^"]+"' "$path/resources/app/package.json" 2>/dev/null | head -n 1 | awk -F'"' '{print $4}' || echo "unknown")"
+            local ver
+            ver="$(get_installed_version "$path")"
+            local tag=""
+            if [[ "$path" =~ /usr/share/antigravity$ ]] && ! version_ge "$ver" "2.0.0"; then
+                tag=" ${YELLOW}(legacy / obsolete)${RESET}"
             fi
-            echo -e "  ✔ [${CYAN}$type${RESET}] $path (version: ${BOLD}$ver${RESET})"
+            echo -e "  ✔ [${CYAN}$type${RESET}] $path (version: ${BOLD}$ver${RESET})$tag"
         done <<< "$existing"
     fi
     echo ""
