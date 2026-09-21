@@ -151,19 +151,22 @@ def merge_sqlite_vscdb(src_db: str, dst_db: str, dry_run: bool = False, write_bo
     def _write_db(target_path: str):
         if dry_run:
             return
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        if os.path.exists(target_path):
-            try:
-                shutil.copy2(target_path, target_path + ".backup")
-            except Exception:
-                pass
-        conn = sqlite3.connect(target_path)
-        cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)")
-        for k, v in merged_data.items():
-            cursor.execute("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)", (k, v))
-        conn.commit()
-        conn.close()
+        try:
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            if os.path.exists(target_path):
+                try:
+                    shutil.copy2(target_path, target_path + ".backup")
+                except Exception:
+                    pass
+            conn = sqlite3.connect(target_path)
+            cursor = conn.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+            for k, v in merged_data.items():
+                cursor.execute("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)", (k, v))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            log(f"Warning: Could not write database {target_path}: {e}", "WARN")
 
     _write_db(dst_db)
     if write_both and src_db != dst_db:
@@ -180,7 +183,11 @@ def copy_or_merge_directory(src: str, dst: str, dry_run: bool = False) -> int:
         rel_path = os.path.relpath(root, src)
         dest_root = os.path.join(dst, rel_path)
         if not dry_run:
-            os.makedirs(dest_root, exist_ok=True)
+            try:
+                os.makedirs(dest_root, exist_ok=True)
+            except Exception as e:
+                log(f"Warning: Could not create directory {dest_root}: {e}", "WARN")
+                continue
         for f in files:
             s_file = os.path.join(root, f)
             d_file = os.path.join(dest_root, f)
@@ -253,9 +260,12 @@ def migrate_extensions(src_dot: str, dst_dot: str, dry_run: bool = False) -> int
         added += 1
         
     if not dry_run and added > 0:
-        os.makedirs(dst_ext, exist_ok=True)
-        with open(dst_json, "w", encoding="utf-8") as f:
-            json.dump(new_list, f)
+        try:
+            os.makedirs(dst_ext, exist_ok=True)
+            with open(dst_json, "w", encoding="utf-8") as f:
+                json.dump(new_list, f)
+        except Exception as e:
+            log(f"Warning: Could not write extensions json {dst_json}: {e}", "WARN")
             
     return added
 
@@ -264,8 +274,11 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
     if not os.path.exists(dir_a) and not os.path.exists(dir_b):
         return 0
     if not dry_run:
-        os.makedirs(dir_a, exist_ok=True)
-        os.makedirs(dir_b, exist_ok=True)
+        try:
+            os.makedirs(dir_a, exist_ok=True)
+            os.makedirs(dir_b, exist_ok=True)
+        except Exception:
+            pass
     
     set_a = set(os.listdir(dir_a)) if os.path.exists(dir_a) else set()
     set_b = set(os.listdir(dir_b)) if os.path.exists(dir_b) else set()
@@ -278,11 +291,17 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
         
         if os.path.exists(path_a) and not os.path.exists(path_b):
             if not dry_run:
-                shutil.copytree(path_a, path_b, symlinks=True)
+                try:
+                    shutil.copytree(path_a, path_b, symlinks=True)
+                except Exception as e:
+                    log(f"Warning: Could not copy workspace {path_a} to {path_b}: {e}", "WARN")
             merged_count += 1
         elif os.path.exists(path_b) and not os.path.exists(path_a):
             if not dry_run:
-                shutil.copytree(path_b, path_a, symlinks=True)
+                try:
+                    shutil.copytree(path_b, path_a, symlinks=True)
+                except Exception as e:
+                    log(f"Warning: Could not copy workspace {path_b} to {path_a}: {e}", "WARN")
             merged_count += 1
         elif os.path.exists(path_a) and os.path.exists(path_b):
             db_a = os.path.join(path_a, "state.vscdb")
@@ -505,15 +524,21 @@ def sync_bidirectional(dry_run: bool = False):
         src_i = os.path.join(PATH_CONFIG_LEGACY, "User", item)
         dst_i = os.path.join(PATH_CONFIG_IDE, "User", item)
         if os.path.exists(src_i) and not os.path.exists(dst_i) and not dry_run:
-            if os.path.isdir(src_i):
-                copy_or_merge_directory(src_i, dst_i)
-            else:
-                shutil.copy2(src_i, dst_i)
+            try:
+                if os.path.isdir(src_i):
+                    copy_or_merge_directory(src_i, dst_i)
+                else:
+                    shutil.copy2(src_i, dst_i)
+            except Exception as e:
+                log(f"Warning: Could not copy {src_i} to {dst_i}: {e}", "WARN")
         elif os.path.exists(dst_i) and not os.path.exists(src_i) and not dry_run:
-            if os.path.isdir(dst_i):
-                copy_or_merge_directory(dst_i, src_i)
-            else:
-                shutil.copy2(dst_i, src_i)
+            try:
+                if os.path.isdir(dst_i):
+                    copy_or_merge_directory(dst_i, src_i)
+                else:
+                    shutil.copy2(dst_i, src_i)
+            except Exception as e:
+                log(f"Warning: Could not copy {dst_i} to {src_i}: {e}", "WARN")
                 
     # 5. Extensions
     if os.path.exists(PATH_DOT_LEGACY) and os.path.exists(PATH_DOT_IDE):
