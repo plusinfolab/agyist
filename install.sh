@@ -54,8 +54,14 @@ show_post_install_box() {
 
 # 1. If running from within an existing checkout of agyist
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
-if [ -n "$SCRIPT_SOURCE" ] && [ -f "$SCRIPT_SOURCE" ]; then
-    REPO_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+if [ -n "$SCRIPT_SOURCE" ] && [ -e "$SCRIPT_SOURCE" ]; then
+    REAL_SOURCE="$SCRIPT_SOURCE"
+    while [ -h "$REAL_SOURCE" ]; do
+        DIR="$(cd -P "$(dirname "$REAL_SOURCE")" >/dev/null 2>&1 && pwd)"
+        REAL_SOURCE="$(readlink "$REAL_SOURCE")"
+        [[ "$REAL_SOURCE" != /* ]] && REAL_SOURCE="$DIR/$REAL_SOURCE"
+    done
+    REPO_DIR="$(cd -P "$(dirname "$REAL_SOURCE")" && pwd)"
     if [ -f "$REPO_DIR/agyist" ] && [ -f "$REPO_DIR/lib/installer.sh" ]; then
         ensure_path_configured
         chmod +x "$REPO_DIR/agyist"
@@ -87,9 +93,28 @@ elif command -v git >/dev/null 2>&1; then
     }
 elif command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
     echo "Fetching agyist archive..."
-    curl -fsSL "$TARBALL_URL" | tar -xz -C "$APP_DATA" --strip-components=1
+    curl -fsSL "$TARBALL_URL" | tar -xz -C "$APP_DATA" --strip-components=1 2>/dev/null || true
 else
     echo "Error: Neither git nor curl+tar is available to install agyist." >&2
+    exit 1
+fi
+
+# If remote download was blocked (e.g. private repo), check for local copy
+if [ ! -f "$APP_DATA/agyist" ] || [ ! -f "$APP_DATA/lib/common.sh" ]; then
+    for local_cand in "$HOME/Projects/agyist" "$PWD"; do
+        if [ -f "$local_cand/agyist" ] && [ -f "$local_cand/lib/common.sh" ]; then
+            echo "Copying local agyist suite from $local_cand to $APP_DATA..."
+            cp -r "$local_cand"/* "$APP_DATA/" 2>/dev/null || true
+            break
+        fi
+    done
+fi
+
+if [ ! -f "$APP_DATA/agyist" ] || [ ! -f "$APP_DATA/lib/common.sh" ]; then
+    echo "Error: Failed to obtain agyist suite files." >&2
+    echo "If https://github.com/plusinfolab/agyist.git is private, please clone with your credentials first:" >&2
+    echo "  git clone https://github.com/plusinfolab/agyist.git ~/Projects/agyist" >&2
+    echo "  cd ~/Projects/agyist && ./install.sh" >&2
     exit 1
 fi
 

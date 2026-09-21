@@ -156,8 +156,44 @@ install_product() {
         local current_ver
         current_ver="$(cat "$version_file" 2>/dev/null || true)"
         if [ "$current_ver" = "$version" ]; then
-            log_success "$product is already up to date ($version at $install_dir)."
-            return 0
+            # Verify that the installation files actually exist and are executable
+            local existing_exec=""
+            if [ "$product" = "ide" ]; then
+                if [ -x "$install_dir/antigravity-ide" ]; then
+                    existing_exec="$install_dir/antigravity-ide"
+                elif [ -x "$install_dir/antigravity" ]; then
+                    existing_exec="$install_dir/antigravity"
+                elif [ -x "$install_dir/bin/antigravity-ide" ]; then
+                    existing_exec="$install_dir/bin/antigravity-ide"
+                fi
+            else
+                if [ -x "$install_dir/antigravity" ]; then
+                    existing_exec="$install_dir/antigravity"
+                fi
+            fi
+
+            if [ -n "$existing_exec" ] && [ -x "$existing_exec" ]; then
+                local exec_name
+                exec_name="$(basename "$existing_exec")"
+                [ "$exec_name" = "antigravity" ] && [ "$product" = "ide" ] && exec_name="antigravity-ide"
+
+                # Ensure CLI launcher exists and points correctly
+                create_cli_launcher "$exec_name" "$existing_exec" "$bin_dir" "$install_dir"
+                # Ensure desktop entry and workspace screen shortcut exist
+                install_desktop_integration "$product" "$install_dir" "$bin_dir/$exec_name" "$scope"
+
+                # Ensure Cockpit directory signatures
+                if [ "$product" = "ide" ]; then
+                    mkdir -p "$install_dir/bin" 2>/dev/null || true
+                    [ -e "$install_dir/bin/antigravity-ide" ] || ln -sf "$existing_exec" "$install_dir/bin/antigravity-ide" 2>/dev/null || true
+                fi
+
+                log_success "$product is already up to date ($version at $install_dir)."
+                log_info "Verified and refreshed CLI launcher ($bin_dir/$exec_name) and desktop shortcuts."
+                return 0
+            else
+                log_warn "Version matches ($version) but application executable is missing in $install_dir. Proceeding with clean reinstall..."
+            fi
         fi
     fi
 

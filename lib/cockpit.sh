@@ -520,6 +520,10 @@ if os.path.exists(config_path):
         data = {}
 
 data["antigravity_app_path"] = chosen_path
+if "antigravity_launch_on_switch" not in data:
+    data["antigravity_launch_on_switch"] = True
+if "antigravity_dual_switch_no_restart_enabled" not in data:
+    data["antigravity_dual_switch_no_restart_enabled"] = False
 
 try:
     with open(config_path, "w", encoding="utf-8") as f:

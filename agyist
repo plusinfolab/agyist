@@ -18,8 +18,29 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Canonical symlink resolution to find true repository/install directory
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
+
+if [ ! -f "$LIB_DIR/common.sh" ]; then
+    for candidate in \
+        "${XDG_DATA_HOME:-$HOME/.local/share}/agyist/lib" \
+        "$HOME/Projects/agyist/lib" \
+        "/usr/local/share/agyist/lib" \
+        "/usr/share/agyist/lib"; do
+        if [ -f "$candidate/common.sh" ]; then
+            LIB_DIR="$candidate"
+            SCRIPT_DIR="$(dirname "$LIB_DIR")"
+            break
+        fi
+    done
+fi
 
 # shellcheck source=lib/common.sh
 source "$LIB_DIR/common.sh"

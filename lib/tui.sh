@@ -42,18 +42,62 @@ run_interactive_menu() {
         1)
             echo ""
             log_step "Starting Antigravity IDE installation..."
-            install_product "ide" "" "auto" 0 ""
+            local force_ide=0
+            if [ -d "$HOME/.local/share/antigravity-ide" ] && [ -f "$HOME/.local/share/antigravity-ide/.antigravity-version" ]; then
+                local cur_ver
+                cur_ver="$(cat "$HOME/.local/share/antigravity-ide/.antigravity-version" 2>/dev/null || true)"
+                echo -e "Antigravity IDE is already installed (${cur_ver:-installed} at ~/.local/share/antigravity-ide)."
+                echo "  1) Refresh & repair launchers, desktop icons, and Cockpit integration [Fast]"
+                echo "  2) Clean re-download and force reinstall from scratch"
+                echo "  3) Cancel"
+                read -rp "Enter choice [1-3, default 1]: " rein_choice
+                case "$rein_choice" in
+                    2|reinstall|force) force_ide=1 ;;
+                    3|cancel|c) log_info "Installation cancelled."; continue ;;
+                    *) force_ide=0 ;;
+                esac
+            fi
+            install_product "ide" "" "auto" "$force_ide" ""
             ;;
         2)
             echo ""
             log_step "Starting Antigravity 2.0 Desktop installation..."
-            install_product "desktop" "" "auto" 0 ""
+            local force_desk=0
+            if [ -d "$HOME/.local/share/antigravity" ] && [ -f "$HOME/.local/share/antigravity/.antigravity-version" ]; then
+                local cur_ver
+                cur_ver="$(cat "$HOME/.local/share/antigravity/.antigravity-version" 2>/dev/null || true)"
+                echo -e "Antigravity 2.0 Desktop is already installed (${cur_ver:-installed} at ~/.local/share/antigravity)."
+                echo "  1) Refresh & repair launchers, desktop icons, and registrations [Fast]"
+                echo "  2) Clean re-download and force reinstall from scratch"
+                echo "  3) Cancel"
+                read -rp "Enter choice [1-3, default 1]: " rein_choice
+                case "$rein_choice" in
+                    2|reinstall|force) force_desk=1 ;;
+                    3|cancel|c) log_info "Installation cancelled."; continue ;;
+                    *) force_desk=0 ;;
+                esac
+            fi
+            install_product "desktop" "" "auto" "$force_desk" ""
             ;;
         3)
             echo ""
             log_step "Starting Full Suite installation..."
-            install_product "ide" "" "auto" 0 ""
-            install_product "desktop" "" "auto" 0 ""
+            local force_all=0
+            if ([ -d "$HOME/.local/share/antigravity-ide" ] && [ -f "$HOME/.local/share/antigravity-ide/.antigravity-version" ]) || \
+               ([ -d "$HOME/.local/share/antigravity" ] && [ -f "$HOME/.local/share/antigravity/.antigravity-version" ]); then
+                echo "Antigravity components are already installed."
+                echo "  1) Refresh & repair launchers, desktop icons, and registrations [Fast]"
+                echo "  2) Clean re-download and force reinstall both applications"
+                echo "  3) Cancel"
+                read -rp "Enter choice [1-3, default 1]: " rein_choice
+                case "$rein_choice" in
+                    2|reinstall|force) force_all=1 ;;
+                    3|cancel|c) log_info "Installation cancelled."; continue ;;
+                    *) force_all=0 ;;
+                esac
+            fi
+            install_product "ide" "" "auto" "$force_all" ""
+            install_product "desktop" "" "auto" "$force_all" ""
             ;;
         4)
             echo ""
@@ -251,7 +295,7 @@ print(json.dumps(status, indent=2))
 run_uninstall() {
     log_step "Uninstalling Antigravity helper-managed binaries & desktop integrations..."
     
-    # Remove desktop files
+    # Remove desktop files and workspace shortcuts
     for df in \
         "/usr/share/applications/antigravity.desktop" \
         "/usr/share/applications/antigravity-ide.desktop" \
@@ -260,7 +304,11 @@ run_uninstall() {
         "$HOME/.local/share/applications/antigravity.desktop" \
         "$HOME/.local/share/applications/antigravity-ide.desktop" \
         "$HOME/.local/share/applications/antigravity-url-handler.desktop" \
-        "$HOME/.local/share/applications/antigravity-ide-url-handler.desktop"; do
+        "$HOME/.local/share/applications/antigravity-ide-url-handler.desktop" \
+        "$HOME/Desktop/Antigravity IDE.desktop" \
+        "$HOME/Desktop/Antigravity 2.0.desktop" \
+        "$HOME/Desktop/antigravity.desktop" \
+        "$HOME/Desktop/antigravity-ide.desktop"; do
         if [ -f "$df" ]; then
             rm -f "$df" 2>/dev/null || sudo rm -f "$df" 2>/dev/null || true
             log_dim "Removed $df"
@@ -280,6 +328,30 @@ run_uninstall() {
             log_dim "Removed $bin"
         fi
     done
+
+    # Remove application install packages
+    for app_dir in \
+        "$HOME/.local/share/antigravity-ide" \
+        "$HOME/.local/share/antigravity" \
+        "$HOME/.local/share/antigravity-ide.previous" \
+        "$HOME/.local/share/antigravity.previous"; do
+        if [ -d "$app_dir" ]; then
+            rm -rf "$app_dir" 2>/dev/null || true
+            log_dim "Removed application directory: $app_dir"
+        fi
+    done
+
+    # Remove installed icon assets
+    rm -f "$HOME/.local/share/icons/hicolor/"*"/apps/antigravity"* 2>/dev/null || true
+    rm -f "$HOME/.local/share/pixmaps/antigravity"* 2>/dev/null || true
+
+    # Refresh desktop and icon database
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -q -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    fi
 
     log_success "Uninstall completed. User chats, brains and settings in ~/.gemini and ~/.config were preserved."
 }

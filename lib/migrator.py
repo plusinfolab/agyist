@@ -806,7 +806,7 @@ def main():
         if cockpit:
             print(f"  ✔ Cockpit Tools:     {cockpit.get('email')} (Active in {cockpit.get('source')})")
         else:
-            print("  - Cockpit Tools:     No active account configured")
+            print("  - Cockpit Tools:     No active account configured (add accounts in Cockpit Tools GUI)")
             
         ide = acc_data.get("ide")
         if ide:

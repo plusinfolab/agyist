@@ -225,6 +225,34 @@ DESKTOP
         chmod 644 "$url_desktop" 2>/dev/null || true
     fi
 
+    # Install launcher onto the user's Desktop screen if ~/Desktop exists
+    local user_desktop_dir=""
+    if [ -n "${XDG_DESKTOP_DIR:-}" ] && [ -d "$XDG_DESKTOP_DIR" ]; then
+        user_desktop_dir="$XDG_DESKTOP_DIR"
+    elif [ -d "$HOME/Desktop" ]; then
+        user_desktop_dir="$HOME/Desktop"
+    fi
+
+    if [ -n "$user_desktop_dir" ] && [ -w "$user_desktop_dir" ]; then
+        if [ "$product" = "ide" ] && [ -f "$desktop_dir/antigravity-ide.desktop" ]; then
+            local target_screen_desktop="$user_desktop_dir/Antigravity IDE.desktop"
+            cp "$desktop_dir/antigravity-ide.desktop" "$target_screen_desktop" 2>/dev/null || true
+            chmod +x "$target_screen_desktop" 2>/dev/null || true
+            if command -v gio >/dev/null 2>&1; then
+                gio set "$target_screen_desktop" metadata::trusted true 2>/dev/null || true
+            fi
+            log_dim "Created desktop workspace launcher: $target_screen_desktop"
+        elif [ "$product" = "desktop" ] && [ -f "$desktop_dir/antigravity.desktop" ]; then
+            local target_screen_desktop="$user_desktop_dir/Antigravity 2.0.desktop"
+            cp "$desktop_dir/antigravity.desktop" "$target_screen_desktop" 2>/dev/null || true
+            chmod +x "$target_screen_desktop" 2>/dev/null || true
+            if command -v gio >/dev/null 2>&1; then
+                gio set "$target_screen_desktop" metadata::trusted true 2>/dev/null || true
+            fi
+            log_dim "Created desktop workspace launcher: $target_screen_desktop"
+        fi
+    fi
+
     # Refresh desktop & icon databases
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$desktop_dir" >/dev/null 2>&1 || true
@@ -255,17 +283,30 @@ setup_desktop_integrations() {
     local ide_exec=""
     local desktop_exec=""
 
-    if [ -x "/usr/share/antigravity/bin/antigravity" ]; then
-        ide_exec="/usr/share/antigravity/bin/antigravity"
+    # Prioritize modern user installations over obsolete builds
+    if [ -x "$HOME/.local/share/antigravity-ide/antigravity-ide" ]; then
+        ide_exec="$HOME/.local/share/antigravity-ide/antigravity-ide"
     elif [ -x "$HOME/.local/bin/antigravity-ide" ]; then
         ide_exec="$HOME/.local/bin/antigravity-ide"
+    elif [ -x "/usr/local/bin/antigravity-ide" ]; then
+        ide_exec="/usr/local/bin/antigravity-ide"
+    elif [ -x "/opt/antigravity-ide/antigravity-ide" ]; then
+        ide_exec="/opt/antigravity-ide/antigravity-ide"
     elif command -v antigravity-ide >/dev/null 2>&1; then
         ide_exec="$(command -v antigravity-ide)"
+    elif [ -x "/usr/share/antigravity/bin/antigravity" ]; then
+        ide_exec="/usr/share/antigravity/bin/antigravity"
     elif command -v antigravity >/dev/null 2>&1; then
         ide_exec="$(command -v antigravity)"
     fi
 
-    if [ -x "/usr/bin/antigravity" ]; then
+    if [ -x "$HOME/.local/share/antigravity/antigravity" ]; then
+        desktop_exec="$HOME/.local/share/antigravity/antigravity"
+    elif [ -x "$HOME/.local/bin/antigravity" ]; then
+        desktop_exec="$HOME/.local/bin/antigravity"
+    elif [ -x "/usr/local/bin/antigravity" ]; then
+        desktop_exec="/usr/local/bin/antigravity"
+    elif [ -x "/usr/bin/antigravity" ]; then
         desktop_exec="/usr/bin/antigravity"
     elif command -v antigravity >/dev/null 2>&1; then
         desktop_exec="$(command -v antigravity)"
