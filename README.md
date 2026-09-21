@@ -56,10 +56,15 @@
 ## Installation & Deployment
 
 ### 1. One-Line Remote Install (Any Linux Machine)
-Run this single command on any machine to download, install `agyist`, and launch the interactive setup:
+Run this single command on any Linux workstation to download, install the `agyist` CLI suite into `~/.local/bin/agyist` (and `/usr/local/bin/agyist` if root/sudo is available), and launch the interactive setup:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh | bash
 ```
+
+> **Note on Shell PATH**: In Linux, child processes cannot mutate parent shell environments. To start using `agyist` immediately in the same terminal session right after running the installer, reload your shell profile:
+> ```bash
+> source ~/.bashrc   # or: source ~/.zshrc
+> ```
 
 To install both Antigravity IDE and Antigravity 2.0 Desktop unattended:
 ```bash
@@ -69,35 +74,84 @@ curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh 
 ### 2. Interactive Terminal UI
 When run locally without arguments, `agyist` presents an interactive terminal wizard:
 ```bash
-./agyist
+agyist
 ```
 
 ### 3. Standalone & Fleet Commands
 ```bash
 # Install Antigravity IDE in user scope (no root needed)
-./agyist --ide --user
+agyist --ide --user
 
 # Install Antigravity 2.0 Desktop app
-./agyist --desktop --user
+agyist --desktop --user
 
 # Install or upgrade both applications system-wide
-sudo ./agyist --all --system
+sudo agyist --all --system
 
 # Bi-directionally synchronize chats, brains, and state between 2.0 and IDE
-./agyist --sync
+agyist --sync
 
 # Check if updates are available (exit code 10 if update available)
-./agyist --check-update
+agyist --check-update
 
 # Unattended fleet upgrade of all installed components
-./agyist --upgrade -y -q
+agyist --upgrade -y -q
 
 # Generate a standalone offline bundle for air-gapped office PCs
-./agyist --bundle ~/antigravity-office-bundle.tar.gz
+agyist --bundle ~/antigravity-office-bundle.tar.gz
 
 # Schedule automated daily background updates via systemd user timer
-./agyist --setup-autoupdate daily
+agyist --setup-autoupdate daily
 ```
+
+---
+
+## Upgrades & Maintenance
+
+### 1. Self-Updating `agyist` CLI Suite
+Whenever new features, bugfixes, or Cockpit Tools adaptations are pushed to GitHub, update `agyist` itself with a single command without needing to reinstall:
+```bash
+agyist --self-update
+```
+- For **Git clones**: Runs a fast `git fetch && git merge --ff-only origin/main`.
+- For **curl/standalone installs**: Downloads and unpacks the latest release tarball directly from GitHub and refreshes binary symlinks.
+
+### 2. Upgrading Antigravity Applications
+To upgrade all installed Antigravity components (IDE and 2.0 Desktop) to the latest official Google releases:
+```bash
+agyist --upgrade
+```
+> **ProTip**: `agyist --upgrade` automatically self-updates `agyist` first, ensuring your scrapers and migration tools are always up to date before updating the applications!
+
+To check if updates are available without applying them (exit code `0` = up to date, `10` = update available):
+```bash
+agyist --check-update
+```
+
+---
+
+## Cockpit Tools Account Switcher Integration
+
+`agyist` bridges Cockpit Tools with modern Antigravity releases on Linux:
+- **Zero-Root Discovery**: Automatically registers `~/.local/share/antigravity-ide` so Cockpit Tools discovers your installation without requiring `sudo` or root privileges.
+- **Configurable Launch Target**:
+  ```bash
+  agyist --cockpit ide       # Launch Antigravity IDE (v2.5.5) on account switch
+  agyist --cockpit desktop   # Launch Antigravity 2.0 Desktop (v2.13.0) on account switch
+  agyist --cockpit both      # Unified mode (keeps both applications synchronized)
+  agyist --restart-cockpit   # Restart running Cockpit Tools daemon to reload configurations
+  ```
+- **Inspect Active Accounts**:
+  ```bash
+  agyist --account           # Verify active credentials in IDE, Desktop 2.0 & Cockpit
+  agyist --account --json    # Machine-readable JSON output for dashboards
+  ```
+- **Real-Time Auto-Sync Watcher**:
+  ```bash
+  agyist --watch             # Run real-time state & account watcher in foreground
+  agyist --setup-watch       # Install background systemd user daemon (starts on boot)
+  agyist --remove-watch      # Disable and remove background service
+  ```
 
 ---
 
@@ -105,34 +159,35 @@ sudo ./agyist --all --system
 
 | Command / Flag | Description |
 |---|---|
-| `./agyist` | Launch the interactive TUI menu |
-| `./agyist --ide` | Install / update Antigravity IDE |
-| `./agyist --desktop` | Install / update Antigravity 2.0 Desktop app |
-| `./agyist --all` | Install / update both applications |
-| `./agyist --upgrade` | One-click upgrade for all currently installed components |
-| `./agyist --check-update` | Check for updates (exit `0`: up to date, `10`: update available) |
-| `./agyist --self-update` | Update agyist CLI suite itself from remote GitHub repository |
-| `./agyist --sync` | Bi-directionally synchronize chats, brains & state (2.0 <-> IDE) |
-| `./agyist --bundle [file]` | Generate standalone offline deployment bundle for office machines |
-| `./agyist --setup-autoupdate` | Configure automated daily/weekly background updates (systemd/cron) |
-| `./agyist --remove-autoupdate` | Disable automated background updates |
-| `./agyist --account` | Inspect active account in IDE, Desktop 2.0 & Cockpit Tools |
-| `./agyist --watch` | Run real-time state & account switch watcher daemon |
-| `./agyist --setup-watch` | Configure background systemd user service for auto-sync on boot |
-| `./agyist --remove-watch` | Disable and remove background auto-sync service |
-| `./agyist --desktop-entry` | Install Linux desktop launchers & URL protocol handlers (`antigravity://`) |
-| `./agyist --cockpit` | Configure and fix Cockpit Tools account switcher for Antigravity IDE |
-| `./agyist --diagnose-cockpit` | Diagnose Cockpit Tools path configuration and status |
-| `./agyist --status [--json]` | Display installed versions, paths, and brain/chat sync status |
-| `./agyist --backup [file]` | Create a complete backup of brains, chats, memory, and settings |
-| `./agyist --import <file>` | Restore / import brains, chats, and settings from a backup archive |
-| `./agyist --migrate` | Migrate data between legacy Antigravity and Antigravity IDE |
-| `./agyist --target-dir <path>` | Specify custom installation directory |
-| `./agyist --user` | Install into user space (`~/.local/share/` and `~/.local/bin/`) |
-| `./agyist --system` | Install system-wide (`/opt/` and `/usr/local/bin/`) |
-| `./agyist -q, --quiet` | Quiet mode (suppress banners and progress messages) |
-| `./agyist -y, --yes` | Unattended mode (assume yes to all prompts) |
-| `./agyist --uninstall` | Cleanly remove installed binaries, launchers, and desktop entries |
+| `agyist` | Launch the interactive TUI menu |
+| `agyist --ide` | Install / update Antigravity IDE |
+| `agyist --desktop` | Install / update Antigravity 2.0 Desktop app |
+| `agyist --all` | Install / update both applications |
+| `agyist --upgrade` | One-click upgrade for all installed components (auto self-updates agyist first) |
+| `agyist --self-update` | Update agyist CLI suite itself from remote GitHub repository |
+| `agyist --check-update` | Check for updates (exit `0`: up to date, `10`: update available) |
+| `agyist --sync` | Bi-directionally synchronize chats, brains & state (2.0 <-> IDE) |
+| `agyist --bundle [file]` | Generate standalone offline deployment bundle for office machines |
+| `agyist --setup-autoupdate` | Configure automated daily/weekly background updates (systemd/cron) |
+| `agyist --remove-autoupdate` | Disable automated background updates |
+| `agyist --account` | Inspect active account in IDE, Desktop 2.0 & Cockpit Tools |
+| `agyist --watch` | Run real-time state & account switch watcher daemon |
+| `agyist --setup-watch` | Configure background systemd user service for auto-sync on boot |
+| `agyist --remove-watch` | Disable and remove background auto-sync service |
+| `agyist --desktop-entry` | Install Linux desktop launchers & URL protocol handlers (`antigravity://`) |
+| `agyist --cockpit [target]` | Configure Cockpit Tools launch path (`ide`, `desktop`, or `both`) |
+| `agyist --restart-cockpit` | Restart running Cockpit Tools daemon to reload configurations |
+| `agyist --diagnose-cockpit` | Diagnose Cockpit Tools path configuration and status |
+| `agyist --status [--json]` | Display installed versions, paths, and brain/chat sync status |
+| `agyist --backup [file]` | Create a complete backup of brains, chats, memory, and settings |
+| `agyist --import <file>` | Restore / import brains, chats, and settings from a backup archive |
+| `agyist --migrate` | Migrate data between legacy Antigravity and Antigravity IDE |
+| `agyist --target-dir <path>` | Specify custom installation directory |
+| `agyist --user` | Install into user space (`~/.local/share/` and `~/.local/bin/`) |
+| `agyist --system` | Install system-wide (`/opt/` and `/usr/local/bin/`) |
+| `agyist -q, --quiet` | Quiet mode (suppress banners and progress messages) |
+| `agyist -y, --yes` | Unattended mode (assume yes to all prompts) |
+| `agyist --uninstall` | Cleanly remove installed binaries, launchers, and desktop entries |
 
 ---
 
