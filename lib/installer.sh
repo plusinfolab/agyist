@@ -78,6 +78,12 @@ LAUNCHER
     chmod 755 "$launcher_path"
     log_success "Created CLI launcher: $launcher_path"
 
+    # Provide shorthand 'agy' command launcher if not present
+    if [ ! -e "$bin_dir/agy" ]; then
+        ln -sf "$launcher_path" "$bin_dir/agy" 2>/dev/null || true
+        log_dim "Created shorthand launcher: $bin_dir/agy"
+    fi
+
     # Ensure ~/.local/bin is noted if not in PATH
     if [ "$bin_dir" = "$HOME/.local/bin" ]; then
         case ":$PATH:" in
