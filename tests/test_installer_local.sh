@@ -36,8 +36,22 @@ echo "==> Testing Cockpit Tools Diagnostics..."
 "$PROJECT_ROOT/agyist" --diagnose-cockpit | grep "Cockpit Tools & Antigravity" >/dev/null || { echo "Cockpit diagnose test failed"; exit 1; }
 echo "✔ Cockpit diagnose test passed"
 
+echo "==> Testing Account Inspection..."
+"$PROJECT_ROOT/agyist" --account | grep -q "Antigravity & Cockpit Tools Active Accounts" || { echo "Account test failed"; exit 1; }
+"$PROJECT_ROOT/agyist" --account --json | grep -q '"unique_emails"' || { echo "Account JSON test failed"; exit 1; }
+echo "✔ Account test passed"
+
+echo "==> Testing Real-Time Watcher Dry-run..."
+"$PROJECT_ROOT/agyist" --watch --dry-run | grep -q "Watcher dry-run check passed" || { echo "Watch dry-run test failed"; exit 1; }
+echo "✔ Watcher dry-run test passed"
+
+echo "==> Testing Desktop Entry Configuration..."
+"$PROJECT_ROOT/agyist" --desktop-entry --dry-run | grep -q "Desktop integration dry-run completed successfully" || { echo "Desktop entry test failed"; exit 1; }
+echo "✔ Desktop entry test passed"
+
 echo "==> Testing Self-Update Dry-run..."
 "$PROJECT_ROOT/agyist" --self-update --dry-run | grep -q "Self-update check completed" || { echo "Self-update test failed"; exit 1; }
 echo "✔ Self-update dry-run test passed"
 
 echo "==> All automated tests passed successfully!"
+

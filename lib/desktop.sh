@@ -113,7 +113,7 @@ Type=Application
 StartupNotify=true
 StartupWMClass=antigravity-ide
 Categories=Development;IDE;TextEditor;
-MimeType=inode/directory;text/plain;application/x-code-workspace;application/x-antigravity-workspace;x-scheme-handler/antigravity-ide;
+MimeType=inode/directory;text/plain;application/x-code-workspace;application/x-antigravity-workspace;x-scheme-handler/antigravity;x-scheme-handler/antigravity-ide;
 Actions=new-empty-window;
 Keywords=vscode;antigravity;ide;ai;
 
@@ -137,7 +137,7 @@ Type=Application
 NoDisplay=true
 StartupNotify=true
 Categories=Development;IDE;
-MimeType=x-scheme-handler/antigravity-ide;
+MimeType=x-scheme-handler/antigravity;x-scheme-handler/antigravity-ide;
 DESKTOP
         chmod 644 "$url_desktop" 2>/dev/null || true
 
@@ -244,5 +244,73 @@ install_nautilus_extension() {
     if [ -f "$ext_script" ]; then
         cp "$ext_script" "$nautilus_dir/antigravity_nautilus.py"
         chmod 644 "$nautilus_dir/antigravity_nautilus.py"
+    fi
+}
+
+setup_desktop_integrations() {
+    local dry_run="${1:-0}"
+    print_banner
+    log_step "Configuring Linux Desktop entries and URL protocol handlers..."
+
+    local ide_exec=""
+    local desktop_exec=""
+
+    if [ -x "/usr/share/antigravity/bin/antigravity" ]; then
+        ide_exec="/usr/share/antigravity/bin/antigravity"
+    elif [ -x "$HOME/.local/bin/antigravity-ide" ]; then
+        ide_exec="$HOME/.local/bin/antigravity-ide"
+    elif command -v antigravity-ide >/dev/null 2>&1; then
+        ide_exec="$(command -v antigravity-ide)"
+    elif command -v antigravity >/dev/null 2>&1; then
+        ide_exec="$(command -v antigravity)"
+    fi
+
+    if [ -x "/usr/bin/antigravity" ]; then
+        desktop_exec="/usr/bin/antigravity"
+    elif command -v antigravity >/dev/null 2>&1; then
+        desktop_exec="$(command -v antigravity)"
+    fi
+
+    local scope="user"
+    if [ "$(id -u)" -eq 0 ]; then
+        scope="system"
+    fi
+
+    if [ "$dry_run" -eq 1 ]; then
+        [ -n "$ide_exec" ] && log_info "[dry-run] Would configure IDE desktop entry for $ide_exec"
+        [ -n "$desktop_exec" ] && log_info "[dry-run] Would configure Desktop 2.0 entry for $desktop_exec"
+        log_info "[dry-run] Would register x-scheme-handler/antigravity URL protocol"
+        log_success "Desktop integration dry-run completed successfully!"
+        return 0
+    fi
+
+    local configured=0
+    if [ -n "$ide_exec" ]; then
+        local ide_dir
+        ide_dir="$(dirname "$ide_exec")"
+        [ "$(basename "$ide_dir")" = "bin" ] && ide_dir="$(dirname "$ide_dir")"
+        install_desktop_integration "ide" "$ide_dir" "$ide_exec" "$scope"
+        configured=1
+        log_success "Configured Antigravity IDE desktop entry & protocol handler"
+    fi
+
+    if [ -n "$desktop_exec" ] && [ "$desktop_exec" != "$ide_exec" ]; then
+        local desk_dir
+        desk_dir="$(dirname "$desktop_exec")"
+        install_desktop_integration "desktop" "$desk_dir" "$desktop_exec" "$scope"
+        configured=1
+        log_success "Configured Antigravity 2.0 Desktop application entry"
+    fi
+
+    if command -v xdg-mime >/dev/null 2>&1; then
+        xdg-mime default antigravity-ide.desktop x-scheme-handler/antigravity 2>/dev/null || true
+        xdg-mime default antigravity-ide.desktop x-scheme-handler/antigravity-ide 2>/dev/null || true
+        log_success "Associated 'antigravity://' URL protocol handler with Antigravity IDE"
+    fi
+
+    if [ "$configured" -eq 1 ]; then
+        log_success "Desktop integration updated successfully!"
+    else
+        log_warn "No Antigravity installations found to integrate."
     fi
 }

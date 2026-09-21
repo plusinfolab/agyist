@@ -245,24 +245,27 @@ except Exception:
         log_warn "secret-tool not found in PATH. Install with: sudo apt install libsecret-tools"
     fi
 
-    echo ""
-    echo "=== SQLite Credentials & Database Status ==="
-    local ide_db="$HOME/.config/Antigravity IDE/User/globalStorage/state.vscdb"
-    local desktop_db="$HOME/.config/Antigravity/User/globalStorage/state.vscdb"
-    
-    if [ -f "$ide_db" ]; then
-        log_success "Antigravity IDE state.vscdb exists: $ide_db"
+    local user_share_ide="$HOME/.local/share/antigravity-ide"
+    if [ -f "$user_share_ide/bin/antigravity-ide" ] && [ -f "$user_share_ide/resources/app/product.json" ]; then
+        log_success "Zero-root Cockpit discovery root: $user_share_ide"
+    elif [ -d "$user_share_ide" ]; then
+        log_info "Zero-root discovery directory present ($user_share_ide)"
     else
-        log_warn "Antigravity IDE state.vscdb not found: $ide_db"
-    fi
-
-    if [ -f "$desktop_db" ]; then
-        log_success "Antigravity 2.0 state.vscdb exists: $desktop_db"
-    else
-        log_warn "Antigravity 2.0 state.vscdb not found: $desktop_db"
+        log_dim "  Zero-root discovery root ($user_share_ide) not configured yet (run: agyist --cockpit)"
     fi
 
     echo ""
+    echo "=== Active Accounts & Switch State ==="
+    show_account_status
+}
+
+show_account_status() {
+    local json_flag="${1:-0}"
+    if [ "$json_flag" -eq 1 ] || [ "${JSON_OUTPUT:-0}" -eq 1 ]; then
+        python3 "$PROJECT_ROOT/lib/migrator.py" --account --json
+    else
+        python3 "$PROJECT_ROOT/lib/migrator.py" --account
+    fi
 }
 
 fix_cockpit_integration() {
@@ -389,12 +392,27 @@ fix_cockpit_integration() {
                 log_success "Installed Cockpit Tools directory signatures in $ide_dir"
             fi
 
-            # User-scope discovery bridge (~/.local/share/antigravity-ide)
+            # User-scope zero-root discovery root (~/.local/share/antigravity-ide)
             local user_share_ide="$HOME/.local/share/antigravity-ide"
             mkdir -p "$HOME/.local/share" 2>/dev/null || true
-            if [ ! -e "$user_share_ide" ]; then
-                ln -sfn "$ide_dir" "$user_share_ide" 2>/dev/null || true
-                log_success "Created user-scope discovery link: $user_share_ide -> $ide_dir"
+            if [ -L "$user_share_ide" ]; then
+                rm -f "$user_share_ide" 2>/dev/null || true
+            fi
+            mkdir -p "$user_share_ide/bin" 2>/dev/null || true
+            if [ -d "$user_share_ide" ]; then
+                for entry in "$ide_dir"/*; do
+                    local base
+                    base="$(basename "$entry")"
+                    [ "$base" = "bin" ] && continue
+                    [ "$base" = "antigravity-ide" ] && continue
+                    [ -e "$entry" ] && ln -sfn "$entry" "$user_share_ide/$base" 2>/dev/null || true
+                done
+                ln -sf "$primary_path" "$user_share_ide/antigravity-ide" 2>/dev/null || true
+                ln -sf "$primary_path" "$user_share_ide/bin/antigravity-ide" 2>/dev/null || true
+                if [ -f "$ide_dir/bin/antigravity" ]; then
+                    ln -sf "$ide_dir/bin/antigravity" "$user_share_ide/bin/antigravity" 2>/dev/null || true
+                fi
+                log_success "Created zero-root Cockpit discovery root: $user_share_ide"
             fi
         fi
     fi

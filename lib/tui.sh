@@ -28,13 +28,16 @@ run_interactive_menu() {
     echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import / Restore${RESET} Brains & Chats from an Archive"
     echo -e "  ${CYAN}9)${RESET}  ${BOLD}Migrate${RESET} Legacy Antigravity Data -> Antigravity IDE"
     echo -e "  ${CYAN}10)${RESET} ${BOLD}Fix Cockpit Tools Account Switcher${RESET} (IDE / 2.0 / Both)"
-    echo -e "  ${CYAN}11)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
-    echo -e "  ${CYAN}12)${RESET} View System Diagnostics & Installation Status"
-    echo -e "  ${CYAN}13)${RESET} Uninstall Antigravity"
-    echo -e "  ${CYAN}14)${RESET} Exit"
+    echo -e "  ${CYAN}11)${RESET} ${BOLD}Verify Active Accounts & Switch Status${RESET} (IDE vs Cockpit)"
+    echo -e "  ${CYAN}12)${RESET} ${BOLD}Background Auto-Sync Watcher${RESET} (Real-time daemon / service)"
+    echo -e "  ${CYAN}13)${RESET} ${BOLD}Register Desktop Entry & URL Protocols${RESET} (antigravity://)"
+    echo -e "  ${CYAN}14)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
+    echo -e "  ${CYAN}15)${RESET} View System Diagnostics & Installation Status"
+    echo -e "  ${CYAN}16)${RESET} Uninstall Antigravity"
+    echo -e "  ${CYAN}17)${RESET} Exit"
     echo ""
 
-    read -rp "Enter choice [1-14]: " choice
+    read -rp "Enter choice [1-17]: " choice
     case "$choice" in
         1)
             echo ""
@@ -102,13 +105,41 @@ run_interactive_menu() {
             ;;
         11)
             echo ""
-            self_update_agyist 0
+            # shellcheck source=lib/cockpit.sh
+            source "$SCRIPT_DIR/cockpit.sh"
+            show_account_status 0
             ;;
         12)
             echo ""
-            show_system_status 0
+            # shellcheck source=lib/watcher.sh
+            source "$SCRIPT_DIR/watcher.sh"
+            echo "Real-Time State & Account Sync Watcher:"
+            echo "  1) Run Watcher in foreground (Ctrl+C to stop)"
+            echo "  2) Install systemd user service (starts on boot)"
+            echo "  3) Remove systemd user service"
+            read -rp "Choice [1-3]: " watch_choice
+            case "$watch_choice" in
+                1) run_state_watcher 0 ;;
+                2) setup_watch_service ;;
+                3) remove_watch_service ;;
+                *) log_warn "Invalid selection." ;;
+            esac
             ;;
         13)
+            echo ""
+            # shellcheck source=lib/desktop.sh
+            source "$SCRIPT_DIR/desktop.sh"
+            setup_desktop_integrations
+            ;;
+        14)
+            echo ""
+            self_update_agyist 0
+            ;;
+        15)
+            echo ""
+            show_system_status 0
+            ;;
+        16)
             echo ""
             read -rp "Are you sure you want to uninstall Antigravity? [y/N]: " confirm
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
@@ -117,7 +148,7 @@ run_interactive_menu() {
                 log_info "Uninstall cancelled."
             fi
             ;;
-        14|q|Q)
+        17|q|Q)
             echo "Exiting."
             exit 0
             ;;

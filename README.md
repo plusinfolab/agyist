@@ -116,6 +116,11 @@ sudo ./agyist --all --system
 | `./agyist --bundle [file]` | Generate standalone offline deployment bundle for office machines |
 | `./agyist --setup-autoupdate` | Configure automated daily/weekly background updates (systemd/cron) |
 | `./agyist --remove-autoupdate` | Disable automated background updates |
+| `./agyist --account` | Inspect active account in IDE, Desktop 2.0 & Cockpit Tools |
+| `./agyist --watch` | Run real-time state & account switch watcher daemon |
+| `./agyist --setup-watch` | Configure background systemd user service for auto-sync on boot |
+| `./agyist --remove-watch` | Disable and remove background auto-sync service |
+| `./agyist --desktop-entry` | Install Linux desktop launchers & URL protocol handlers (`antigravity://`) |
 | `./agyist --cockpit` | Configure and fix Cockpit Tools account switcher for Antigravity IDE |
 | `./agyist --diagnose-cockpit` | Diagnose Cockpit Tools path configuration and status |
 | `./agyist --status [--json]` | Display installed versions, paths, and brain/chat sync status |
@@ -175,6 +180,7 @@ agyist/
 │   ├── migrator.py            # Brain, chat, state.vscdb & protobuf sync engine
 │   ├── backup.sh              # Backup, restore & sync CLI integration
 │   ├── cockpit.sh             # Cockpit Tools account switcher & path bridge
+│   ├── watcher.sh             # Real-time state watcher & systemd sync daemon
 │   ├── tui.sh                 # Interactive terminal UI wizard
 │   └── nautilus.py            # GNOME Files / Nautilus right-click integration
 ├── assets/

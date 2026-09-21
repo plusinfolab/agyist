@@ -23,6 +23,7 @@ import time
 import subprocess
 import contextlib
 import tempfile
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -151,6 +152,19 @@ def merge_sqlite_vscdb(src_db: str, dst_db: str, dry_run: bool = False, write_bo
     def _write_db(target_path: str):
         if dry_run:
             return
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        if os.path.exists(target_path):
+            try:
+                shutil.copy2(target_path, target_path + ".backup")
+            except Exception:
+                pass
+        conn = sqlite3.connect(target_path)
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+        for k, v in merged_data.items():
+            cursor.execute("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)", (k, v))
+        conn.commit()
+        conn.close()
         try:
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             if os.path.exists(target_path):
@@ -183,6 +197,7 @@ def copy_or_merge_directory(src: str, dst: str, dry_run: bool = False) -> int:
         rel_path = os.path.relpath(root, src)
         dest_root = os.path.join(dst, rel_path)
         if not dry_run:
+            os.makedirs(dest_root, exist_ok=True)
             try:
                 os.makedirs(dest_root, exist_ok=True)
             except Exception as e:
@@ -260,6 +275,9 @@ def migrate_extensions(src_dot: str, dst_dot: str, dry_run: bool = False) -> int
         added += 1
         
     if not dry_run and added > 0:
+        os.makedirs(dst_ext, exist_ok=True)
+        with open(dst_json, "w", encoding="utf-8") as f:
+            json.dump(new_list, f)
         try:
             os.makedirs(dst_ext, exist_ok=True)
             with open(dst_json, "w", encoding="utf-8") as f:
@@ -274,6 +292,8 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
     if not os.path.exists(dir_a) and not os.path.exists(dir_b):
         return 0
     if not dry_run:
+        os.makedirs(dir_a, exist_ok=True)
+        os.makedirs(dir_b, exist_ok=True)
         try:
             os.makedirs(dir_a, exist_ok=True)
             os.makedirs(dir_b, exist_ok=True)
@@ -291,6 +311,7 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
         
         if os.path.exists(path_a) and not os.path.exists(path_b):
             if not dry_run:
+                shutil.copytree(path_a, path_b, symlinks=True)
                 try:
                     shutil.copytree(path_a, path_b, symlinks=True)
                 except Exception as e:
@@ -298,6 +319,7 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
             merged_count += 1
         elif os.path.exists(path_b) and not os.path.exists(path_a):
             if not dry_run:
+                shutil.copytree(path_b, path_a, symlinks=True)
                 try:
                     shutil.copytree(path_b, path_a, symlinks=True)
                 except Exception as e:
@@ -459,6 +481,8 @@ def sync_bidirectional(dry_run: bool = False):
     
     # 1. Gemini Brains, Conversations & Assistant States
     if not dry_run:
+        os.makedirs(PATH_GEMINI_MAIN, exist_ok=True)
+        os.makedirs(PATH_GEMINI_IDE, exist_ok=True)
         try:
             os.makedirs(PATH_GEMINI_MAIN, exist_ok=True)
             os.makedirs(PATH_GEMINI_IDE, exist_ok=True)
@@ -552,6 +576,132 @@ def run_migration(dry_run: bool = False):
     sync_bidirectional(dry_run=dry_run)
     log("Migration completed successfully!", "SUCCESS")
 
+def get_account_from_db(db_path: str):
+    """Extracts active account credentials, display name, and plan from a state.vscdb SQLite file."""
+    if not os.path.exists(db_path):
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ItemTable'")
+        if not cur.fetchone():
+            conn.close()
+            return None
+
+        # 1. Check antigravityAuthStatus (JSON format written by Language Server)
+        cur.execute("SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus'")
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                data = json.loads(row[0])
+                plan = "Free"
+                raw_str = str(data).lower()
+                if "ultra" in raw_str:
+                    plan = "Google AI Ultra"
+                elif "pro" in raw_str:
+                    plan = "Google AI Pro"
+                elif "standard" in raw_str:
+                    plan = "Standard"
+                email = data.get("email", "").strip()
+                name = data.get("name", "").strip()
+                has_token = bool(data.get("apiKey"))
+                conn.close()
+                return {
+                    "email": email,
+                    "name": name,
+                    "plan": plan,
+                    "has_token": has_token,
+                    "source": "antigravityAuthStatus"
+                }
+            except Exception:
+                pass
+
+        # 2. Check antigravityUnifiedStateSync.oauthToken (Protobuf binary format injected by Cockpit / Language Server)
+        cur.execute("SELECT value FROM ItemTable WHERE key = 'antigravityUnifiedStateSync.oauthToken'")
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                raw_bytes = base64.b64decode(row[0])
+                emails = re.findall(rb"[\w\.-]+@[\w\.-]+\.[a-zA-Z]{2,}", raw_bytes)
+                if emails:
+                    email = emails[0].decode(errors="ignore").strip()
+                    conn.close()
+                    return {
+                        "email": email,
+                        "name": "",
+                        "plan": "Authorized",
+                        "has_token": True,
+                        "source": "oauthToken"
+                    }
+            except Exception:
+                pass
+        conn.close()
+    except Exception as e:
+        return {"error": str(e)}
+    return None
+
+def get_cockpit_active_account():
+    """Reads active account configured in Cockpit Tools."""
+    cockpit_dir = os.environ.get("COCKPIT_TOOLS_DATA_DIR", os.path.expanduser("~/.antigravity_cockpit"))
+    curr_file = os.path.join(cockpit_dir, "current_account.json")
+    if os.path.exists(curr_file):
+        try:
+            with open(curr_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                email = data.get("email", "").strip()
+                if email:
+                    return {
+                        "email": email,
+                        "updated_at": data.get("updated_at"),
+                        "source": "current_account.json"
+                    }
+        except Exception:
+            pass
+
+    idx_file = os.path.join(cockpit_dir, "accounts.json")
+    if os.path.exists(idx_file):
+        try:
+            with open(idx_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                curr_id = data.get("current_account_id")
+                accounts = data.get("accounts", [])
+                for acc in accounts:
+                    if acc.get("id") == curr_id:
+                        return {
+                            "email": acc.get("email", "").strip(),
+                            "id": curr_id,
+                            "source": "accounts.json"
+                        }
+        except Exception:
+            pass
+    return None
+
+def get_account_status():
+    """Returns active account info for Cockpit Tools, Antigravity IDE, and Antigravity 2.0 Desktop."""
+    ide_db = os.path.join(PATH_CONFIG_IDE, "User", "globalStorage", "state.vscdb")
+    desktop_db = os.path.join(PATH_CONFIG_LEGACY, "User", "globalStorage", "state.vscdb")
+
+    ide_acc = get_account_from_db(ide_db)
+    desktop_acc = get_account_from_db(desktop_db)
+    cockpit_acc = get_cockpit_active_account()
+
+    unique_emails = set()
+    for acc in [ide_acc, desktop_acc, cockpit_acc]:
+        if acc and acc.get("email"):
+            unique_emails.add(acc["email"].lower())
+
+    in_sync = True
+    if len(unique_emails) > 1:
+        in_sync = False
+
+    return {
+        "cockpit": cockpit_acc,
+        "ide": ide_acc,
+        "desktop": desktop_acc,
+        "in_sync": in_sync,
+        "unique_emails": list(unique_emails)
+    }
+
 def get_status_dict():
     """Returns a structured dictionary of Antigravity data status and synchronization state."""
     status = {
@@ -629,6 +779,7 @@ def get_status_dict():
     else:
         status["sync_status"] = "standalone"
         
+    status["accounts"] = get_account_status()
     return status
 
 def main():
@@ -639,10 +790,51 @@ def main():
     parser.add_argument("--sync", action="store_true", help="Bi-directionally synchronize chats, brains and state between 2.0 and IDE")
     parser.add_argument("--dry-run", action="store_true", help="Simulate actions without modifying files")
     parser.add_argument("--status", action="store_true", help="Inspect brains, chats, and config sizes")
+    parser.add_argument("--account", "--verify-account", dest="account", action="store_true", help="Inspect active accounts across Cockpit Tools, IDE, and 2.0")
     parser.add_argument("--json", action="store_true", help="Output status as JSON")
     
     args = parser.parse_args()
     
+    if args.account:
+        acc_data = get_account_status()
+        if args.json:
+            print(json.dumps(acc_data, indent=2))
+            sys.exit(0)
+            
+        print("\n=== Antigravity & Cockpit Tools Active Accounts ===")
+        cockpit = acc_data.get("cockpit")
+        if cockpit:
+            print(f"  ✔ Cockpit Tools:     {cockpit.get('email')} (Active in {cockpit.get('source')})")
+        else:
+            print("  - Cockpit Tools:     No active account configured")
+            
+        ide = acc_data.get("ide")
+        if ide:
+            user_str = f"{ide.get('name')} <{ide.get('email')}>" if ide.get("name") else ide.get("email")
+            plan_str = f" [{ide.get('plan')}]" if ide.get("plan") else ""
+            print(f"  ✔ Antigravity IDE:   {user_str}{plan_str}")
+        else:
+            print("  - Antigravity IDE:   No active account or state.vscdb not found")
+            
+        desktop = acc_data.get("desktop")
+        if desktop:
+            user_str = f"{desktop.get('name')} <{desktop.get('email')}>" if desktop.get("name") else desktop.get("email")
+            plan_str = f" [{desktop.get('plan')}]" if desktop.get("plan") else ""
+            print(f"  ✔ Antigravity 2.0:   {user_str}{plan_str}")
+        else:
+            print("  - Antigravity 2.0:   No active account or state.vscdb not found")
+            
+        print("")
+        if acc_data["in_sync"]:
+            if acc_data["unique_emails"]:
+                print(f"Status: IN SYNC (Active: {', '.join(acc_data['unique_emails'])})\n")
+            else:
+                print("Status: IN SYNC (No active accounts detected)\n")
+        else:
+            print("⚠ Status: DESYNCHRONIZED! Different accounts detected across applications.")
+            print("  Run './agyist --sync' to propagate current IDE/Cockpit credentials to both apps.\n")
+        sys.exit(0)
+
     if args.status:
         status_data = get_status_dict()
         if args.json:
@@ -661,7 +853,13 @@ def main():
                 print(f"  ✔ {name}: {db['total_keys']} total keys, {db['chat_notifications']} conversation threads")
             else:
                 print(f"  - {name}: no database")
-        print(f"Sync Status: {status_data['sync_status'].upper()}\n")
+        print(f"Sync Status: {status_data['sync_status'].upper()}")
+
+        acc_data = status_data.get("accounts", {})
+        if acc_data.get("unique_emails"):
+            print(f"Active Account: {', '.join(acc_data['unique_emails'])} ({'IN SYNC' if acc_data.get('in_sync') else 'OUT OF SYNC'})\n")
+        else:
+            print("")
         sys.exit(0)
         
     if args.backup is not None:

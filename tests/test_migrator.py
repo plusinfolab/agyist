@@ -11,7 +11,7 @@ import base64
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
-from migrator import merge_sqlite_vscdb, merge_json_files, PROTOBUF_KEYS_TO_CONCAT
+from migrator import merge_sqlite_vscdb, merge_json_files, PROTOBUF_KEYS_TO_CONCAT, get_account_from_db, get_account_status
 
 class TestMigrator(unittest.TestCase):
     def setUp(self):
@@ -87,6 +87,55 @@ class TestMigrator(unittest.TestCase):
         self.assertEqual(data["theme"], "dark")           # preserved from src
         self.assertEqual(data["tabSize"], 2)             # preserved from src
         self.assertEqual(data["zoom"], 1)                # dst preserved
+
+    def test_get_account_from_db_json(self):
+        import json
+        db_path = os.path.join(self.tmpdir.name, "test_account_json.vscdb")
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+        payload = json.dumps({
+            "name": "Alex Dev",
+            "email": "alex@company.com",
+            "apiKey": "ya29.test123",
+            "plan": "pro"
+        })
+        cur.execute("INSERT INTO ItemTable VALUES (?, ?)", ("antigravityAuthStatus", payload))
+        conn.commit()
+        conn.close()
+
+        acc = get_account_from_db(db_path)
+        self.assertIsNotNone(acc)
+        self.assertEqual(acc["email"], "alex@company.com")
+        self.assertEqual(acc["name"], "Alex Dev")
+        self.assertEqual(acc["plan"], "Google AI Pro")
+        self.assertTrue(acc["has_token"])
+
+    def test_get_account_from_db_protobuf(self):
+        db_path = os.path.join(self.tmpdir.name, "test_account_proto.vscdb")
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+        # OAuth token binary payload containing email
+        proto_data = b"\x0a\x1auser@example.com\x12\x20ya29.mocked_token_string"
+        b64 = base64.b64encode(proto_data).decode("utf-8")
+        cur.execute("INSERT INTO ItemTable VALUES (?, ?)", ("antigravityUnifiedStateSync.oauthToken", b64))
+        conn.commit()
+        conn.close()
+
+        acc = get_account_from_db(db_path)
+        self.assertIsNotNone(acc)
+        self.assertEqual(acc["email"], "user@example.com")
+        self.assertTrue(acc["has_token"])
+
+    def test_get_account_status_structure(self):
+        status = get_account_status()
+        self.assertIn("cockpit", status)
+        self.assertIn("ide", status)
+        self.assertIn("desktop", status)
+        self.assertIn("in_sync", status)
+        self.assertIn("unique_emails", status)
+        self.assertIsInstance(status["unique_emails"], list)
 
 if __name__ == "__main__":
     unittest.main()
