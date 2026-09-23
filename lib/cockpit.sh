@@ -586,3 +586,116 @@ except Exception as e:
     fi
     echo ""
 }
+
+list_cockpit_accounts() {
+    local json_flag="${1:-0}"
+    if [ "$json_flag" -eq 1 ] || [ "${JSON_OUTPUT:-0}" -eq 1 ]; then
+        python3 "$PROJECT_ROOT/lib/migrator.py" --accounts --json
+    else
+        python3 "$PROJECT_ROOT/lib/migrator.py" --accounts
+    fi
+}
+
+switch_cockpit_account() {
+    local target="${1:-}"
+    local app_target="${2:-both}"
+    if [ -n "$target" ]; then
+        python3 "$PROJECT_ROOT/lib/migrator.py" --switch "$target" --switch-app "$app_target"
+    else
+        python3 "$PROJECT_ROOT/lib/migrator.py" --switch --switch-app "$app_target"
+    fi
+}
+
+list_cockpit_instances() {
+    local json_flag="${1:-0}"
+    if [ "$json_flag" -eq 1 ] || [ "${JSON_OUTPUT:-0}" -eq 1 ]; then
+        python3 "$PROJECT_ROOT/lib/migrator.py" --instances --json
+    else
+        python3 "$PROJECT_ROOT/lib/migrator.py" --instances
+    fi
+}
+
+launch_cockpit_instance() {
+    local name="${1:-}"
+    shift || true
+
+    if [ -z "$name" ]; then
+        log_error "Instance profile name required."
+        echo "Usage: agyist --instance <profile_name> [workspace_path]"
+        return 1
+    fi
+
+    local ide_exec
+    ide_exec="$(resolve_ide_executable)"
+    if [ -z "$ide_exec" ]; then
+        log_error "Antigravity IDE executable not found. Install it first with: agyist --ide"
+        return 1
+    fi
+
+    local data_dir
+    data_dir="$(get_cockpit_data_dir)"
+    local profile_dir="$data_dir/instances/antigravity/$name"
+
+    if [ ! -d "$profile_dir" ]; then
+        log_step "Initializing new isolated profile '$name'..."
+        python3 "$PROJECT_ROOT/lib/migrator.py" --create-instance "$name"
+    fi
+
+    log_step "Launching Antigravity IDE instance '$name'..."
+    log_info "User Data Directory: $profile_dir"
+    "$ide_exec" --user-data-dir "$profile_dir" "$@" &
+    log_success "Instance '$name' launched in background (PID: $!)"
+}
+
+repair_cockpit_tools() {
+    print_banner
+    log_step "Running Cockpit Tools Health Doctor & Auto-Repair..."
+    python3 "$PROJECT_ROOT/lib/migrator.py" --repair-cockpit
+
+    # Ensure launchers and directory signatures are verified
+    local ide_exec
+    ide_exec="$(resolve_ide_executable)"
+    if [ -n "$ide_exec" ]; then
+        local ide_dir
+        ide_dir="$(resolve_ide_install_dir "$ide_exec")"
+        if [ -n "$ide_dir" ] && [ -d "$ide_dir" ]; then
+            if [ -x "$ide_dir/antigravity-ide" ] && [ ! -e "$ide_dir/bin/antigravity-ide" ]; then
+                mkdir -p "$ide_dir/bin" 2>/dev/null || true
+                ln -sf "$ide_exec" "$ide_dir/bin/antigravity-ide" 2>/dev/null || true
+                log_success "Repaired directory signature $ide_dir/bin/antigravity-ide"
+            fi
+        fi
+    fi
+
+    if pgrep -f cockpit-tools >/dev/null 2>&1; then
+        echo ""
+        log_info "Cockpit Tools is running. A restart is recommended to reload clean state."
+        if [ "${YES:-0}" -eq 1 ] || [ ! -t 0 ]; then
+            restart_cockpit_tools
+        else
+            read -rp "Restart Cockpit Tools now? [Y/n]: " r_choice
+            if [[ ! "$r_choice" =~ ^[Nn]$ ]]; then
+                restart_cockpit_tools
+            fi
+        fi
+    fi
+}
+
+export_cockpit_accounts() {
+    local target_path="${1:-}"
+    if [ -n "$target_path" ]; then
+        python3 "$PROJECT_ROOT/lib/migrator.py" --export-accounts "$target_path"
+    else
+        python3 "$PROJECT_ROOT/lib/migrator.py" --export-accounts
+    fi
+}
+
+import_cockpit_accounts() {
+    local target_path="${1:-}"
+    if [ -z "$target_path" ]; then
+        log_error "Path to .agyacc export archive is required."
+        echo "Usage: agyist --import-accounts <path_to_archive.agyacc>"
+        return 1
+    fi
+    python3 "$PROJECT_ROOT/lib/migrator.py" --import-accounts "$target_path"
+}

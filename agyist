@@ -93,6 +93,13 @@ Fleet & Enterprise Automation:
   --self-update           Update agyist CLI suite itself from remote repository
 
 Integrations & Third-Party Tools:
+  --switch [EMAIL|NUM]     Instant account switch across Cockpit, IDE & 2.0 Desktop
+  --accounts               List saved Cockpit accounts with token expiration countdown
+  --instance NAME [PATH]   Launch isolated Antigravity profile (separate storage & account)
+  --instances              List configured multi-instance isolated profiles
+  --repair-cockpit, --doctor Scan & repair Cockpit Tools stale lockups, dead PIDs & paths
+  --export-accounts [FILE] Export saved accounts to encrypted .agyacc backup
+  --import-accounts FILE   Import saved accounts from encrypted .agyacc backup
   --account, --verify-account Show active account status & verify Cockpit/IDE sync
   --cockpit [ide|desktop|both] Configure Cockpit Tools account switcher & launch path
   --restart-cockpit        Restart running Cockpit Tools daemon to reload configurations
@@ -157,6 +164,18 @@ COCKPIT_TARGET=""
 DO_RESTART_COCKPIT=0
 DO_DIAGNOSE_COCKPIT=0
 DO_ACCOUNT=0
+DO_SWITCH=0
+SWITCH_TARGET=""
+DO_ACCOUNTS=0
+DO_INSTANCES=0
+DO_INSTANCE=0
+INSTANCE_NAME=""
+INSTANCE_ARGS=()
+DO_REPAIR_COCKPIT=0
+DO_EXPORT_ACCOUNTS=0
+EXPORT_PATH=""
+DO_IMPORT_ACCOUNTS=0
+IMPORT_ACC_PATH=""
 DO_WATCH=0
 DO_SETUP_WATCH=0
 DO_REMOVE_WATCH=0
@@ -262,6 +281,45 @@ while [ $# -gt 0 ]; do
             ;;
         --account|--verify-account|--verify-switch|account)
             DO_ACCOUNT=1
+            ;;
+        --switch|--switch-account|switch)
+            DO_SWITCH=1
+            if [ $# -gt 1 ] && [[ "$2" != --* ]]; then
+                SWITCH_TARGET="$2"
+                shift
+            fi
+            ;;
+        --accounts|--list-accounts|accounts)
+            DO_ACCOUNTS=1
+            ;;
+        --instances|--list-instances|instances)
+            DO_INSTANCES=1
+            ;;
+        --instance|instance)
+            DO_INSTANCE=1
+            [ $# -gt 1 ] || { log_error "--instance requires a profile name"; exit 1; }
+            INSTANCE_NAME="$2"
+            shift
+            while [ $# -gt 1 ] && [[ "$2" != --* ]]; do
+                INSTANCE_ARGS+=("$2")
+                shift
+            done
+            ;;
+        --repair-cockpit|--doctor|doctor|repair-cockpit)
+            DO_REPAIR_COCKPIT=1
+            ;;
+        --export-accounts|export-accounts)
+            DO_EXPORT_ACCOUNTS=1
+            if [ $# -gt 1 ] && [[ "$2" != --* ]]; then
+                EXPORT_PATH="$2"
+                shift
+            fi
+            ;;
+        --import-accounts|import-accounts)
+            DO_IMPORT_ACCOUNTS=1
+            [ $# -gt 1 ] || { log_error "--import-accounts requires an archive path argument"; exit 1; }
+            IMPORT_ACC_PATH="$2"
+            shift
             ;;
         --watch|watch)
             DO_WATCH=1
@@ -403,6 +461,41 @@ fi
 
 if [ "$DO_ACCOUNT" -eq 1 ]; then
     show_account_status "$JSON_OUTPUT"
+    exit 0
+fi
+
+if [ "$DO_SWITCH" -eq 1 ]; then
+    switch_cockpit_account "$SWITCH_TARGET"
+    exit 0
+fi
+
+if [ "$DO_ACCOUNTS" -eq 1 ]; then
+    list_cockpit_accounts "$JSON_OUTPUT"
+    exit 0
+fi
+
+if [ "$DO_INSTANCES" -eq 1 ]; then
+    list_cockpit_instances "$JSON_OUTPUT"
+    exit 0
+fi
+
+if [ "$DO_INSTANCE" -eq 1 ]; then
+    launch_cockpit_instance "$INSTANCE_NAME" "${INSTANCE_ARGS[@]}"
+    exit 0
+fi
+
+if [ "$DO_REPAIR_COCKPIT" -eq 1 ]; then
+    repair_cockpit_tools
+    exit 0
+fi
+
+if [ "$DO_EXPORT_ACCOUNTS" -eq 1 ]; then
+    export_cockpit_accounts "$EXPORT_PATH"
+    exit 0
+fi
+
+if [ "$DO_IMPORT_ACCOUNTS" -eq 1 ]; then
+    import_cockpit_accounts "$IMPORT_ACC_PATH"
     exit 0
 fi
 

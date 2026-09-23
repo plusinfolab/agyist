@@ -12,6 +12,84 @@ source "$SCRIPT_DIR/installer.sh"
 source "$SCRIPT_DIR/backup.sh"
 # shellcheck source=lib/fleet.sh
 source "$SCRIPT_DIR/fleet.sh"
+# shellcheck source=lib/cockpit.sh
+source "$SCRIPT_DIR/cockpit.sh"
+
+run_cockpit_menu() {
+    while true; do
+        echo ""
+        echo -e "${BOLD}=== Cockpit Tools & Multi-Account Hub ===${RESET}"
+        echo -e "  ${CYAN}1)${RESET}  ${BOLD}Switch Active Account${RESET} (Instant CLI switcher)"
+        echo -e "  ${CYAN}2)${RESET}  ${BOLD}Inspect Saved Accounts & Token Expiry Health${RESET}"
+        echo -e "  ${CYAN}3)${RESET}  ${BOLD}Verify Active Accounts & Sync Status${RESET} (IDE vs 2.0 vs Cockpit)"
+        echo -e "  ${CYAN}4)${RESET}  ${BOLD}Multi-Instance Isolated Profiles${RESET} (Launch / Manage)"
+        echo -e "  ${CYAN}5)${RESET}  ${BOLD}Cockpit Health Doctor & Auto-Repair${RESET}"
+        echo -e "  ${CYAN}6)${RESET}  ${BOLD}Configure Launch Path & Fix Integration${RESET} (IDE / 2.0 / Both)"
+        echo -e "  ${CYAN}7)${RESET}  ${BOLD}Export Saved Accounts${RESET} (Password-encrypted .agyacc backup)"
+        echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import Saved Accounts${RESET} (Restore from .agyacc backup)"
+        echo -e "  ${CYAN}9)${RESET}  Restart Cockpit Tools Daemon"
+        echo -e "  ${CYAN}10)${RESET} Return to Main Menu"
+        echo ""
+        read -rp "Enter choice [1-10]: " cp_choice
+        case "$cp_choice" in
+            1)
+                echo ""
+                switch_cockpit_account ""
+                ;;
+            2)
+                echo ""
+                list_cockpit_accounts 0
+                ;;
+            3)
+                echo ""
+                show_account_status 0
+                ;;
+            4)
+                echo ""
+                echo "Multi-Instance Profiles:"
+                echo "  1) List configured profiles"
+                echo "  2) Launch / create an isolated profile"
+                read -rp "Choice [1-2]: " inst_ch
+                case "$inst_ch" in
+                    1) list_cockpit_instances 0 ;;
+                    2)
+                        read -rp "Enter profile name (e.g. client-work, test-account): " p_name
+                        [ -n "$p_name" ] && launch_cockpit_instance "$p_name"
+                        ;;
+                    *) log_warn "Invalid selection." ;;
+                esac
+                ;;
+            5)
+                echo ""
+                repair_cockpit_tools
+                ;;
+            6)
+                echo ""
+                fix_cockpit_integration ""
+                ;;
+            7)
+                echo ""
+                read -rp "Enter export file path (press Enter for default in ~): " exp_f
+                export_cockpit_accounts "$exp_f"
+                ;;
+            8)
+                echo ""
+                read -rp "Enter path to .agyacc backup archive: " imp_f
+                [ -n "$imp_f" ] && import_cockpit_accounts "$imp_f"
+                ;;
+            9)
+                echo ""
+                restart_cockpit_tools
+                ;;
+            10|q|Q)
+                break
+                ;;
+            *)
+                log_warn "Invalid selection."
+                ;;
+        esac
+    done
+}
 
 run_interactive_menu() {
     clear 2>/dev/null || true
@@ -27,7 +105,7 @@ run_interactive_menu() {
     echo -e "  ${CYAN}7)${RESET}  ${BOLD}Backup${RESET} Brains, Chats & Memory to an Archive"
     echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import / Restore${RESET} Brains & Chats from an Archive"
     echo -e "  ${CYAN}9)${RESET}  ${BOLD}Migrate${RESET} Legacy Antigravity Data -> Antigravity IDE"
-    echo -e "  ${CYAN}10)${RESET} ${BOLD}Fix Cockpit Tools Account Switcher${RESET} (IDE / 2.0 / Both)"
+    echo -e "  ${CYAN}10)${RESET} ${BOLD}Cockpit Tools & Multi-Account Hub${RESET} (Switch, Inspect, Profiles, Doctor)"
     echo -e "  ${CYAN}11)${RESET} ${BOLD}Verify Active Accounts & Switch Status${RESET} (IDE vs Cockpit)"
     echo -e "  ${CYAN}12)${RESET} ${BOLD}Background Auto-Sync Watcher${RESET} (Real-time daemon / service)"
     echo -e "  ${CYAN}13)${RESET} ${BOLD}Register Desktop Entry & URL Protocols${RESET} (antigravity://)"
@@ -142,10 +220,7 @@ run_interactive_menu() {
             run_migration_wrapper 0
             ;;
         10)
-            echo ""
-            # shellcheck source=lib/cockpit.sh
-            source "$SCRIPT_DIR/cockpit.sh"
-            fix_cockpit_integration ""
+            run_cockpit_menu
             ;;
         11)
             echo ""

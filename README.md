@@ -130,28 +130,82 @@ agyist --check-update
 
 ---
 
-## Cockpit Tools Account Switcher Integration
+## Cockpit Tools Multi-Account & Multi-Instance Suite
 
-`agyist` bridges Cockpit Tools with modern Antigravity releases on Linux:
-- **Zero-Root Discovery**: Automatically registers `~/.local/share/antigravity-ide` so Cockpit Tools discovers your installation without requiring `sudo` or root privileges.
-- **Configurable Launch Target**:
-  ```bash
-  agyist --cockpit ide       # Launch Antigravity IDE (v2.5.5) on account switch
-  agyist --cockpit desktop   # Launch Antigravity 2.0 Desktop (v2.13.0) on account switch
-  agyist --cockpit both      # Unified mode (keeps both applications synchronized)
-  agyist --restart-cockpit   # Restart running Cockpit Tools daemon to reload configurations
-  ```
-- **Inspect Active Accounts**:
-  ```bash
-  agyist --account           # Verify active credentials in IDE, Desktop 2.0 & Cockpit
-  agyist --account --json    # Machine-readable JSON output for dashboards
-  ```
-- **Real-Time Auto-Sync Watcher**:
-  ```bash
-  agyist --watch             # Run real-time state & account watcher in foreground
-  agyist --setup-watch       # Install background systemd user daemon (starts on boot)
-  agyist --remove-watch      # Disable and remove background service
-  ```
+`agyist` provides a deep, production-grade integration with Cockpit Tools and Antigravity on Linux:
+
+### 1. Instant CLI Account Switcher (`--switch`)
+Switch active accounts across Cockpit Tools, Antigravity IDE, and Antigravity 2.0 Desktop from your terminal:
+```bash
+# Interactive selection menu (lists all saved accounts)
+agyist --switch
+
+# Switch by account index (from --accounts list)
+agyist --switch 2
+
+# Switch by email or partial name
+agyist --switch meetsavani5657@gmail.com
+agyist --switch hiru
+```
+- **Dual-Mode Switching**:
+  - **Online IPC Mode**: If Cockpit Tools is running, communicates with its local WebSocket daemon (`ws://127.0.0.1:<port>`), triggering an instantaneous switch and live UI refresh.
+  - **Offline Direct Mode**: If Cockpit Tools is closed, directly injects credentials into SQLite `state.vscdb` (`antigravityUnifiedStateSync.oauthToken` protobuf + `userStatus` + `antigravityAuthStatus`) and updates `current_account.json` and `accounts.json`.
+
+### 2. Saved Accounts & Token Health Inspector (`--accounts`)
+Inspect all Cockpit accounts with real-time token validity countdowns:
+```bash
+agyist --accounts          # Formatted terminal table
+agyist --accounts --json   # Safe structured JSON (tokens masked)
+```
+
+### 3. Multi-Instance Isolated Profiles (`--instance` & `--instances`)
+Run separate Antigravity IDE instances simultaneously with dedicated `--user-data-dir` profiles and separate logged-in accounts:
+```bash
+# Launch or create an isolated instance named 'client-project'
+agyist --instance client-project ~/Projects/client-repo
+
+# Create and bind an instance profile to a specific account
+python3 lib/migrator.py --create-instance client-work --bind-account 2
+
+# List configured multi-instance profiles
+agyist --instances
+```
+
+### 4. Cockpit Health Doctor & Auto-Repair (`--doctor` / `--repair-cockpit`)
+Diagnose and repair common Cockpit Tools lockups, stale files, and broken paths:
+```bash
+agyist --doctor
+```
+- Safely removes stale `config.json.lock` and `.cockpit-token-locks/*`.
+- Detects and cleans up orphaned `server.json` pointing to dead process IDs.
+- Verifies and auto-repairs `antigravity_app_path` in `config.json` to the latest valid executable.
+- Ensures required directory signatures (`bin/antigravity-ide`) exist.
+
+### 5. Encrypted Account Export & Import (`--export-accounts` / `--import-accounts`)
+Transfer or backup all saved Cockpit accounts using industry-standard **PBKDF2-HMAC-SHA256 (100,000 iterations) + AES-256-GCM**:
+```bash
+# Export all saved accounts to a password-encrypted archive (0600 permissions)
+agyist --export-accounts ~/antigravity-accounts-backup.agyacc
+
+# Import and re-encrypt accounts into a new workstation's Cockpit Tools
+agyist --import-accounts ~/antigravity-accounts-backup.agyacc
+```
+
+### 6. Zero-Root Discovery & Integration Setup
+```bash
+agyist --cockpit ide       # Launch Antigravity IDE (v2.5.5) on account switch
+agyist --cockpit desktop   # Launch Antigravity 2.0 Desktop on account switch
+agyist --cockpit both      # Unified mode (keeps both applications synchronized)
+agyist --restart-cockpit   # Restart running Cockpit Tools daemon to reload configurations
+agyist --account           # Verify active credentials in IDE, Desktop 2.0 & Cockpit
+```
+
+### 7. Real-Time Auto-Sync Watcher
+```bash
+agyist --watch             # Run real-time state & account watcher in foreground
+agyist --setup-watch       # Install background systemd user daemon (starts on boot)
+agyist --remove-watch      # Disable and remove background service
+```
 
 ---
 
@@ -167,6 +221,13 @@ agyist --check-update
 | `agyist --self-update` | Update agyist CLI suite itself from remote GitHub repository |
 | `agyist --check-update` | Check for updates (exit `0`: up to date, `10`: update available) |
 | `agyist --sync` | Bi-directionally synchronize chats, brains & state (2.0 <-> IDE) |
+| `agyist --switch [target]` | Instant account switcher (index, email, or interactive selection) |
+| `agyist --accounts` | List saved Cockpit accounts with real-time token health countdown |
+| `agyist --instance <name> [path]` | Launch isolated Antigravity profile (separate user-data-dir & account) |
+| `agyist --instances` | List configured multi-instance isolated profiles |
+| `agyist --doctor`, `--repair-cockpit` | Health doctor to clean stale locks, dead PIDs, and align paths |
+| `agyist --export-accounts [file]` | Password-encrypted archive export (PBKDF2 + AES-256-GCM) |
+| `agyist --import-accounts <file>` | Import and re-encrypt saved accounts from .agyacc archive |
 | `agyist --bundle [file]` | Generate standalone offline deployment bundle for office machines |
 | `agyist --setup-autoupdate` | Configure automated daily/weekly background updates (systemd/cron) |
 | `agyist --remove-autoupdate` | Disable automated background updates |
