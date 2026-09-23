@@ -293,9 +293,6 @@ def migrate_extensions(src_dot: str, dst_dot: str, dry_run: bool = False) -> int
         added += 1
         
     if not dry_run and added > 0:
-        os.makedirs(dst_ext, exist_ok=True)
-        with open(dst_json, "w", encoding="utf-8") as f:
-            json.dump(new_list, f)
         try:
             os.makedirs(dst_ext, exist_ok=True)
             with open(dst_json, "w", encoding="utf-8") as f:
@@ -310,8 +307,6 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
     if not os.path.exists(dir_a) and not os.path.exists(dir_b):
         return 0
     if not dry_run:
-        os.makedirs(dir_a, exist_ok=True)
-        os.makedirs(dir_b, exist_ok=True)
         try:
             os.makedirs(dir_a, exist_ok=True)
             os.makedirs(dir_b, exist_ok=True)
@@ -329,7 +324,6 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
         
         if os.path.exists(path_a) and not os.path.exists(path_b):
             if not dry_run:
-                shutil.copytree(path_a, path_b, symlinks=True)
                 try:
                     shutil.copytree(path_a, path_b, symlinks=True)
                 except Exception as e:
@@ -337,7 +331,6 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
             merged_count += 1
         elif os.path.exists(path_b) and not os.path.exists(path_a):
             if not dry_run:
-                shutil.copytree(path_b, path_a, symlinks=True)
                 try:
                     shutil.copytree(path_b, path_a, symlinks=True)
                 except Exception as e:
@@ -1655,12 +1648,18 @@ def get_status_dict():
         if os.path.exists(p):
             total_size = 0
             file_count = 0
-            for root, dirs, files in os.walk(p):
-                for f in files:
-                    fp = os.path.join(root, f)
-                    if not os.path.islink(fp):
-                        total_size += os.path.getsize(fp)
-                        file_count += 1
+            try:
+                for root, dirs, files in os.walk(p):
+                    for f in files:
+                        try:
+                            fp = os.path.join(root, f)
+                            if not os.path.islink(fp) and os.path.exists(fp):
+                                total_size += os.path.getsize(fp)
+                                file_count += 1
+                        except (OSError, IOError):
+                            pass
+            except (OSError, IOError):
+                pass
             status["components"][tag] = {
                 "path": p,
                 "exists": True,
@@ -1685,7 +1684,7 @@ def get_status_dict():
     for name, p in db_paths:
         if os.path.exists(p):
             try:
-                conn = sqlite3.connect(p)
+                conn = sqlite3.connect(p, timeout=5.0)
                 cur = conn.cursor()
                 cur.execute("SELECT count(*) FROM ItemTable")
                 count = cur.fetchone()[0]

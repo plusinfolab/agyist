@@ -92,189 +92,193 @@ run_cockpit_menu() {
 }
 
 run_interactive_menu() {
-    clear 2>/dev/null || true
-    print_banner
+    while true; do
+        clear 2>/dev/null || true
+        print_banner
 
-    echo -e "${BOLD}Please select an action:${RESET}"
-    echo -e "  ${CYAN}1)${RESET}  Install / Upgrade ${BOLD}Antigravity IDE${RESET} (AI Coding Environment)"
-    echo -e "  ${CYAN}2)${RESET}  Install / Upgrade ${BOLD}Antigravity 2.0${RESET} (Desktop Agent App)"
-    echo -e "  ${CYAN}3)${RESET}  Install / Upgrade ${BOLD}Both${RESET} (Full Suite)"
-    echo -e "  ${CYAN}4)${RESET}  ${BOLD}Synchronize Chats & Brains${RESET} (Bi-directional 2.0 <-> IDE)"
-    echo -e "  ${CYAN}5)${RESET}  ${BOLD}Create Offline Deployment Bundle${RESET} (Fleet / Air-gapped Office)"
-    echo -e "  ${CYAN}6)${RESET}  ${BOLD}Configure Automated Updates${RESET} (systemd user timer / cron)"
-    echo -e "  ${CYAN}7)${RESET}  ${BOLD}Backup${RESET} Brains, Chats & Memory to an Archive"
-    echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import / Restore${RESET} Brains & Chats from an Archive"
-    echo -e "  ${CYAN}9)${RESET}  ${BOLD}Migrate${RESET} Legacy Antigravity Data -> Antigravity IDE"
-    echo -e "  ${CYAN}10)${RESET} ${BOLD}Cockpit Tools & Multi-Account Hub${RESET} (Switch, Inspect, Profiles, Doctor)"
-    echo -e "  ${CYAN}11)${RESET} ${BOLD}Verify Active Accounts & Switch Status${RESET} (IDE vs Cockpit)"
-    echo -e "  ${CYAN}12)${RESET} ${BOLD}Background Auto-Sync Watcher${RESET} (Real-time daemon / service)"
-    echo -e "  ${CYAN}13)${RESET} ${BOLD}Register Desktop Entry & URL Protocols${RESET} (antigravity://)"
-    echo -e "  ${CYAN}14)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
-    echo -e "  ${CYAN}15)${RESET} View System Diagnostics & Installation Status"
-    echo -e "  ${CYAN}16)${RESET} Uninstall Antigravity"
-    echo -e "  ${CYAN}17)${RESET} Exit"
-    echo ""
+        echo -e "${BOLD}Please select an action:${RESET}"
+        echo -e "  ${CYAN}1)${RESET}  Install / Upgrade ${BOLD}Antigravity IDE${RESET} (AI Coding Environment)"
+        echo -e "  ${CYAN}2)${RESET}  Install / Upgrade ${BOLD}Antigravity 2.0${RESET} (Desktop Agent App)"
+        echo -e "  ${CYAN}3)${RESET}  Install / Upgrade ${BOLD}Both${RESET} (Full Suite)"
+        echo -e "  ${CYAN}4)${RESET}  ${BOLD}Synchronize Chats & Brains${RESET} (Bi-directional 2.0 <-> IDE)"
+        echo -e "  ${CYAN}5)${RESET}  ${BOLD}Create Offline Deployment Bundle${RESET} (Fleet / Air-gapped Office)"
+        echo -e "  ${CYAN}6)${RESET}  ${BOLD}Configure Automated Updates${RESET} (systemd user timer / cron)"
+        echo -e "  ${CYAN}7)${RESET}  ${BOLD}Backup${RESET} Brains, Chats & Memory to an Archive"
+        echo -e "  ${CYAN}8)${RESET}  ${BOLD}Import / Restore${RESET} Brains & Chats from an Archive"
+        echo -e "  ${CYAN}9)${RESET}  ${BOLD}Migrate${RESET} Legacy Antigravity Data -> Antigravity IDE"
+        echo -e "  ${CYAN}10)${RESET} ${BOLD}Cockpit Tools & Multi-Account Hub${RESET} (Switch, Inspect, Profiles, Doctor)"
+        echo -e "  ${CYAN}11)${RESET} ${BOLD}Verify Active Accounts & Switch Status${RESET} (IDE vs Cockpit)"
+        echo -e "  ${CYAN}12)${RESET} ${BOLD}Background Auto-Sync Watcher${RESET} (Real-time daemon / service)"
+        echo -e "  ${CYAN}13)${RESET} ${BOLD}Register Desktop Entry & URL Protocols${RESET} (antigravity://)"
+        echo -e "  ${CYAN}14)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
+        echo -e "  ${CYAN}15)${RESET} View System Diagnostics & Installation Status"
+        echo -e "  ${CYAN}16)${RESET} Uninstall Antigravity"
+        echo -e "  ${CYAN}17)${RESET} Exit"
+        echo ""
 
-    read -rp "Enter choice [1-17]: " choice
-    case "$choice" in
-        1)
-            echo ""
-            log_step "Starting Antigravity IDE installation..."
-            local force_ide=0
-            if [ -d "$HOME/.local/share/antigravity-ide" ] && [ -f "$HOME/.local/share/antigravity-ide/.antigravity-version" ]; then
-                local cur_ver
-                cur_ver="$(cat "$HOME/.local/share/antigravity-ide/.antigravity-version" 2>/dev/null || true)"
-                echo -e "Antigravity IDE is already installed (${cur_ver:-installed} at ~/.local/share/antigravity-ide)."
-                echo "  1) Refresh & repair launchers, desktop icons, and Cockpit integration [Fast]"
-                echo "  2) Clean re-download and force reinstall from scratch"
-                echo "  3) Cancel"
-                read -rp "Enter choice [1-3, default 1]: " rein_choice
-                case "$rein_choice" in
-                    2|reinstall|force) force_ide=1 ;;
-                    3|cancel|c) log_info "Installation cancelled."; continue ;;
-                    *) force_ide=0 ;;
+        read -rp "Enter choice [1-17]: " choice
+        case "$choice" in
+            1)
+                echo ""
+                log_step "Starting Antigravity IDE installation..."
+                local force_ide=0
+                if [ -d "$HOME/.local/share/antigravity-ide" ] && [ -f "$HOME/.local/share/antigravity-ide/.antigravity-version" ]; then
+                    local cur_ver
+                    cur_ver="$(cat "$HOME/.local/share/antigravity-ide/.antigravity-version" 2>/dev/null || true)"
+                    echo -e "Antigravity IDE is already installed (${cur_ver:-installed} at ~/.local/share/antigravity-ide)."
+                    echo "  1) Refresh & repair launchers, desktop icons, and Cockpit integration [Fast]"
+                    echo "  2) Clean re-download and force reinstall from scratch"
+                    echo "  3) Cancel"
+                    read -rp "Enter choice [1-3, default 1]: " rein_choice
+                    case "$rein_choice" in
+                        2|reinstall|force) force_ide=1 ;;
+                        3|cancel|c) log_info "Installation cancelled."; continue ;;
+                        *) force_ide=0 ;;
+                    esac
+                fi
+                install_product "ide" "" "auto" "$force_ide" ""
+                ;;
+            2)
+                echo ""
+                log_step "Starting Antigravity 2.0 Desktop installation..."
+                local force_desk=0
+                if [ -d "$HOME/.local/share/antigravity" ] && [ -f "$HOME/.local/share/antigravity/.antigravity-version" ]; then
+                    local cur_ver
+                    cur_ver="$(cat "$HOME/.local/share/antigravity/.antigravity-version" 2>/dev/null || true)"
+                    echo -e "Antigravity 2.0 Desktop is already installed (${cur_ver:-installed} at ~/.local/share/antigravity)."
+                    echo "  1) Refresh & repair launchers, desktop icons, and registrations [Fast]"
+                    echo "  2) Clean re-download and force reinstall from scratch"
+                    echo "  3) Cancel"
+                    read -rp "Enter choice [1-3, default 1]: " rein_choice
+                    case "$rein_choice" in
+                        2|reinstall|force) force_desk=1 ;;
+                        3|cancel|c) log_info "Installation cancelled."; continue ;;
+                        *) force_desk=0 ;;
+                    esac
+                fi
+                install_product "desktop" "" "auto" "$force_desk" ""
+                ;;
+            3)
+                echo ""
+                log_step "Starting Full Suite installation..."
+                local force_all=0
+                if ([ -d "$HOME/.local/share/antigravity-ide" ] && [ -f "$HOME/.local/share/antigravity-ide/.antigravity-version" ]) || \
+                   ([ -d "$HOME/.local/share/antigravity" ] && [ -f "$HOME/.local/share/antigravity/.antigravity-version" ]); then
+                    echo "Antigravity components are already installed."
+                    echo "  1) Refresh & repair launchers, desktop icons, and registrations [Fast]"
+                    echo "  2) Clean re-download and force reinstall both applications"
+                    echo "  3) Cancel"
+                    read -rp "Enter choice [1-3, default 1]: " rein_choice
+                    case "$rein_choice" in
+                        2|reinstall|force) force_all=1 ;;
+                        3|cancel|c) log_info "Installation cancelled."; continue ;;
+                        *) force_all=0 ;;
+                    esac
+                fi
+                install_product "ide" "" "auto" "$force_all" ""
+                install_product "desktop" "" "auto" "$force_all" ""
+                ;;
+            4)
+                echo ""
+                run_sync 0
+                ;;
+            5)
+                echo ""
+                read -rp "Enter output file path (press Enter for default in ~): " bpath
+                create_offline_bundle "$bpath" 1 1
+                ;;
+            6)
+                echo ""
+                echo "Select update schedule:"
+                echo "  1) Daily (recommended)"
+                echo "  2) Weekly"
+                echo "  3) Disable / remove autoupdate"
+                read -rp "Choice [1-3]: " sched_choice
+                case "$sched_choice" in
+                    1) setup_autoupdate "daily" "user" ;;
+                    2) setup_autoupdate "weekly" "user" ;;
+                    3) remove_autoupdate ;;
+                    *) log_warn "Invalid selection." ;;
                 esac
-            fi
-            install_product "ide" "" "auto" "$force_ide" ""
-            ;;
-        2)
-            echo ""
-            log_step "Starting Antigravity 2.0 Desktop installation..."
-            local force_desk=0
-            if [ -d "$HOME/.local/share/antigravity" ] && [ -f "$HOME/.local/share/antigravity/.antigravity-version" ]; then
-                local cur_ver
-                cur_ver="$(cat "$HOME/.local/share/antigravity/.antigravity-version" 2>/dev/null || true)"
-                echo -e "Antigravity 2.0 Desktop is already installed (${cur_ver:-installed} at ~/.local/share/antigravity)."
-                echo "  1) Refresh & repair launchers, desktop icons, and registrations [Fast]"
-                echo "  2) Clean re-download and force reinstall from scratch"
-                echo "  3) Cancel"
-                read -rp "Enter choice [1-3, default 1]: " rein_choice
-                case "$rein_choice" in
-                    2|reinstall|force) force_desk=1 ;;
-                    3|cancel|c) log_info "Installation cancelled."; continue ;;
-                    *) force_desk=0 ;;
+                ;;
+            7)
+                echo ""
+                read -rp "Enter custom backup file path (press Enter for default): " bpath
+                run_backup "$bpath"
+                ;;
+            8)
+                echo ""
+                read -rp "Enter path to backup archive (.tar.gz): " ipath
+                if [ -n "$ipath" ]; then
+                    run_import "$ipath"
+                else
+                    log_warn "No archive path provided."
+                fi
+                ;;
+            9)
+                echo ""
+                log_step "Running migration..."
+                run_migration_wrapper 0
+                ;;
+            10)
+                run_cockpit_menu
+                ;;
+            11)
+                echo ""
+                # shellcheck source=lib/cockpit.sh
+                source "$SCRIPT_DIR/cockpit.sh"
+                show_account_status 0
+                ;;
+            12)
+                echo ""
+                # shellcheck source=lib/watcher.sh
+                source "$SCRIPT_DIR/watcher.sh"
+                echo "Real-Time State & Account Sync Watcher:"
+                echo "  1) Run Watcher in foreground (Ctrl+C to stop)"
+                echo "  2) Install systemd user service (starts on boot)"
+                echo "  3) Remove systemd user service"
+                read -rp "Choice [1-3]: " watch_choice
+                case "$watch_choice" in
+                    1) run_state_watcher 0 ;;
+                    2) setup_watch_service ;;
+                    3) remove_watch_service ;;
+                    *) log_warn "Invalid selection." ;;
                 esac
-            fi
-            install_product "desktop" "" "auto" "$force_desk" ""
-            ;;
-        3)
-            echo ""
-            log_step "Starting Full Suite installation..."
-            local force_all=0
-            if ([ -d "$HOME/.local/share/antigravity-ide" ] && [ -f "$HOME/.local/share/antigravity-ide/.antigravity-version" ]) || \
-               ([ -d "$HOME/.local/share/antigravity" ] && [ -f "$HOME/.local/share/antigravity/.antigravity-version" ]); then
-                echo "Antigravity components are already installed."
-                echo "  1) Refresh & repair launchers, desktop icons, and registrations [Fast]"
-                echo "  2) Clean re-download and force reinstall both applications"
-                echo "  3) Cancel"
-                read -rp "Enter choice [1-3, default 1]: " rein_choice
-                case "$rein_choice" in
-                    2|reinstall|force) force_all=1 ;;
-                    3|cancel|c) log_info "Installation cancelled."; continue ;;
-                    *) force_all=0 ;;
-                esac
-            fi
-            install_product "ide" "" "auto" "$force_all" ""
-            install_product "desktop" "" "auto" "$force_all" ""
-            ;;
-        4)
-            echo ""
-            run_sync 0
-            ;;
-        5)
-            echo ""
-            read -rp "Enter output file path (press Enter for default in ~): " bpath
-            create_offline_bundle "$bpath" 1 1
-            ;;
-        6)
-            echo ""
-            echo "Select update schedule:"
-            echo "  1) Daily (recommended)"
-            echo "  2) Weekly"
-            echo "  3) Disable / remove autoupdate"
-            read -rp "Choice [1-3]: " sched_choice
-            case "$sched_choice" in
-                1) setup_autoupdate "daily" "user" ;;
-                2) setup_autoupdate "weekly" "user" ;;
-                3) remove_autoupdate ;;
-                *) log_warn "Invalid selection." ;;
-            esac
-            ;;
-        7)
-            echo ""
-            read -rp "Enter custom backup file path (press Enter for default): " bpath
-            run_backup "$bpath"
-            ;;
-        8)
-            echo ""
-            read -rp "Enter path to backup archive (.tar.gz): " ipath
-            if [ -n "$ipath" ]; then
-                run_import "$ipath"
-            else
-                log_warn "No archive path provided."
-            fi
-            ;;
-        9)
-            echo ""
-            log_step "Running migration..."
-            run_migration_wrapper 0
-            ;;
-        10)
-            run_cockpit_menu
-            ;;
-        11)
-            echo ""
-            # shellcheck source=lib/cockpit.sh
-            source "$SCRIPT_DIR/cockpit.sh"
-            show_account_status 0
-            ;;
-        12)
-            echo ""
-            # shellcheck source=lib/watcher.sh
-            source "$SCRIPT_DIR/watcher.sh"
-            echo "Real-Time State & Account Sync Watcher:"
-            echo "  1) Run Watcher in foreground (Ctrl+C to stop)"
-            echo "  2) Install systemd user service (starts on boot)"
-            echo "  3) Remove systemd user service"
-            read -rp "Choice [1-3]: " watch_choice
-            case "$watch_choice" in
-                1) run_state_watcher 0 ;;
-                2) setup_watch_service ;;
-                3) remove_watch_service ;;
-                *) log_warn "Invalid selection." ;;
-            esac
-            ;;
-        13)
-            echo ""
-            # shellcheck source=lib/desktop.sh
-            source "$SCRIPT_DIR/desktop.sh"
-            setup_desktop_integrations
-            ;;
-        14)
-            echo ""
-            self_update_agyist 0
-            ;;
-        15)
-            echo ""
-            show_system_status 0
-            ;;
-        16)
-            echo ""
-            read -rp "Are you sure you want to uninstall Antigravity? [y/N]: " confirm
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                run_uninstall
-            else
-                log_info "Uninstall cancelled."
-            fi
-            ;;
-        17|q|Q)
-            echo "Exiting."
-            exit 0
-            ;;
-        *)
-            log_warn "Invalid selection."
-            ;;
-    esac
+                ;;
+            13)
+                echo ""
+                # shellcheck source=lib/desktop.sh
+                source "$SCRIPT_DIR/desktop.sh"
+                setup_desktop_integrations
+                ;;
+            14)
+                echo ""
+                self_update_agyist 0
+                ;;
+            15)
+                echo ""
+                show_system_status 0
+                ;;
+            16)
+                echo ""
+                read -rp "Are you sure you want to uninstall Antigravity? [y/N]: " confirm
+                if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                    run_uninstall
+                else
+                    log_info "Uninstall cancelled."
+                fi
+                ;;
+            17|q|Q)
+                echo "Exiting."
+                exit 0
+                ;;
+            *)
+                log_warn "Invalid selection."
+                ;;
+        esac
+        echo ""
+        read -rp "Press Enter to return to main menu..."
+    done
 }
 
 show_system_status() {
@@ -282,8 +286,11 @@ show_system_status() {
 
     if [ "$json_output" -eq 1 ]; then
         python3 -c "
-import sys, json, os, subprocess
-import lib.migrator as migrator
+import sys, json, os, subprocess, shutil
+lib_dir = os.environ.get('LIB_DIR', '${LIB_DIR:-$SCRIPT_DIR}')
+if lib_dir not in sys.path:
+    sys.path.insert(0, lib_dir)
+import migrator
 
 status = migrator.get_status_dict()
 status['system'] = {
@@ -317,7 +324,7 @@ status['installations'] = installs
 # Launchers
 launchers = {}
 for cmd in ['antigravity', 'antigravity-ide', 'agy']:
-    which = subprocess.run(['which', cmd], capture_output=True, text=True).stdout.strip()
+    which = shutil.which(cmd)
     launchers[cmd] = which if which else None
 status['launchers'] = launchers
 
@@ -356,15 +363,22 @@ print(json.dumps(status, indent=2))
 
     echo -e "${BOLD}=== CLI Launchers in PATH ===${RESET}"
     for cmd in antigravity antigravity-ide agy; do
-        if command -v "$cmd" >/dev/null 2>&1; then
-            echo -e "  ✔ $cmd: $(which "$cmd")"
+        local which_path
+        which_path="$(command -v "$cmd" 2>/dev/null || true)"
+        if [ -n "$which_path" ]; then
+            echo -e "  ✔ $cmd: $which_path"
         else
             echo -e "  - $cmd: not found"
         fi
     done
     echo ""
 
-    python3 "$SCRIPT_DIR/migrator.py" --status
+    local migrator_py="${LIB_DIR:-$SCRIPT_DIR}/migrator.py"
+    if [ -f "$migrator_py" ]; then
+        python3 "$migrator_py" --status
+    elif [ -f "$SCRIPT_DIR/migrator.py" ]; then
+        python3 "$SCRIPT_DIR/migrator.py" --status
+    fi
 }
 
 run_uninstall() {
