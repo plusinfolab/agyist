@@ -51,8 +51,23 @@ create_cli_launcher() {
     mkdir -p "$bin_dir"
     local launcher_path="$bin_dir/$binary_name"
 
-    # Create robust wrapper script that handles CLI arguments and remote tunnels
-    cat > "$launcher_path" <<LAUNCHER
+    # Safety check: Never overwrite target executable with launcher
+    if [ "$launcher_path" = "$target_exec" ]; then
+        log_warn "Launcher path equals target executable ($launcher_path). Skipping self-overwrite."
+        return 0
+    fi
+
+    # CRITICAL: Always remove existing file or symlink before writing
+    # to prevent Bash 'cat >' from following a symlink and truncating the target binary!
+    rm -f "$launcher_path"
+
+    # If the application provides an official bin launcher script, prefer symlinking directly to it
+    if [ -x "$install_dir/bin/$binary_name" ]; then
+        ln -sf "$install_dir/bin/$binary_name" "$launcher_path"
+        log_success "Linked official CLI launcher: $launcher_path -> $install_dir/bin/$binary_name"
+    else
+        # Create robust wrapper script that handles CLI arguments
+        cat > "$launcher_path" <<LAUNCHER
 #!/usr/bin/env sh
 # agyist generated launcher for $binary_name
 
@@ -64,22 +79,25 @@ if [ ! -x "\$EXEC" ]; then
     exit 1
 fi
 
-# Check for VS Code style CLI javascript entry
+# Check for VS Code style CLI javascript entry and ensure EXEC is a real ELF binary
 CLI="\$APP_DIR/resources/app/out/cli.js"
-if [ -f "\$CLI" ]; then
+if [ -f "\$CLI" ] && file "\$EXEC" 2>/dev/null | grep -q "ELF"; then
     ELECTRON_RUN_AS_NODE=1 "\$EXEC" "\$CLI" "\$@"
     exit \$?
 else
-    "\$EXEC" "\$@"
-    exit \$?
+    exec "\$EXEC" "\$@"
 fi
 LAUNCHER
+        chmod 755 "$launcher_path"
+        log_success "Created CLI launcher: $launcher_path"
+    fi
 
-    chmod 755 "$launcher_path"
-    log_success "Created CLI launcher: $launcher_path"
-
-    # Provide shorthand 'agy' command launcher if not present
-    if [ ! -e "$bin_dir/agy" ]; then
+    # Provide shorthand 'agy' command launcher pointing to antigravity-ide
+    if [ "$binary_name" = "antigravity-ide" ]; then
+        rm -f "$bin_dir/agy"
+        ln -sf "$launcher_path" "$bin_dir/agy" 2>/dev/null || true
+        log_dim "Created shorthand launcher: $bin_dir/agy"
+    elif [ ! -e "$bin_dir/agy" ]; then
         ln -sf "$launcher_path" "$bin_dir/agy" 2>/dev/null || true
         log_dim "Created shorthand launcher: $bin_dir/agy"
     fi
@@ -281,8 +299,8 @@ install_product() {
     # Create CLI Launchers
     if [ "$product" = "ide" ]; then
         create_cli_launcher "antigravity-ide" "$installed_exec" "$bin_dir" "$install_dir"
-        create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
-        if [ ! -f "$bin_dir/antigravity" ]; then
+        # Only alias 'antigravity' to IDE if Antigravity 2.0 Desktop is not installed
+        if [ ! -f "$HOME/.local/share/antigravity/antigravity" ] && [ ! -f "/opt/antigravity/antigravity" ] && [ ! -f "/usr/share/antigravity/antigravity" ]; then
             create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
         fi
     else

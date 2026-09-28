@@ -53,5 +53,45 @@ echo "==> Testing Self-Update Dry-run..."
 "$PROJECT_ROOT/agyist" --self-update --dry-run | grep -q "Self-update check completed" || { echo "Self-update test failed"; exit 1; }
 echo "✔ Self-update dry-run test passed"
 
+echo "==> Testing Launcher Safety & Recursion Prevention..."
+bash -c "
+set -euo pipefail
+SCRIPT_DIR=\"$PROJECT_ROOT/lib\"
+source \"\$SCRIPT_DIR/common.sh\"
+source \"\$SCRIPT_DIR/installer.sh\"
+
+TEST_DIR=\"\$(mktemp -d)\"
+trap \"rm -rf '\$TEST_DIR'\" EXIT
+
+mkdir -p \"\$TEST_DIR/install/bin\" \"\$TEST_DIR/bin\"
+echo '#!/bin/sh' > \"\$TEST_DIR/install/bin/antigravity-ide\"
+echo 'echo OFFICIAL_LAUNCHER_OK' >> \"\$TEST_DIR/install/bin/antigravity-ide\"
+chmod 755 \"\$TEST_DIR/install/bin/antigravity-ide\"
+
+echo 'BINARY_CONTENTS_12345' > \"\$TEST_DIR/install/antigravity-ide\"
+chmod 755 \"\$TEST_DIR/install/antigravity-ide\"
+
+# Pre-existing symlink (the exact trap that triggered the old bug)
+ln -sf \"\$TEST_DIR/install/antigravity-ide\" \"\$TEST_DIR/bin/antigravity-ide\"
+
+# Run create_cli_launcher
+create_cli_launcher 'antigravity-ide' \"\$TEST_DIR/install/antigravity-ide\" \"\$TEST_DIR/bin\" \"\$TEST_DIR/install\" >/dev/null
+
+# 1. Verify original binary was NOT truncated or overwritten
+CONTENT=\"\$(cat \"\$TEST_DIR/install/antigravity-ide\")\"
+if [ \"\$CONTENT\" != 'BINARY_CONTENTS_12345' ]; then
+    echo 'FAILED: Target binary was overwritten by launcher!'
+    exit 1
+fi
+
+# 2. Verify launcher correctly runs without recursion loop
+OUTPUT=\"\$(\"\$TEST_DIR/bin/antigravity-ide\")\"
+if [ \"\$OUTPUT\" != 'OFFICIAL_LAUNCHER_OK' ]; then
+    echo \"FAILED: Launcher did not run expected binary! Output: \$OUTPUT\"
+    exit 1
+fi
+"
+echo "✔ Launcher safety & recursion prevention test passed"
+
 echo "==> All automated tests passed successfully!"
 
