@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
 from migrator import (
     merge_sqlite_vscdb,
     merge_workspace_storage,
+    merge_conversation_summaries_db,
     configure_pbtxt_states,
     PROTOBUF_KEYS_TO_CONCAT,
 )
@@ -24,11 +25,73 @@ class TestSyncBidirectional(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.db_a = os.path.join(self.tmpdir.name, "db_a", "state.vscdb")
         self.db_b = os.path.join(self.tmpdir.name, "db_b", "state.vscdb")
+        self.sum_a = os.path.join(self.tmpdir.name, "sum_a", "conversation_summaries.db")
+        self.sum_b = os.path.join(self.tmpdir.name, "sum_b", "conversation_summaries.db")
         os.makedirs(os.path.dirname(self.db_a), exist_ok=True)
         os.makedirs(os.path.dirname(self.db_b), exist_ok=True)
+        os.makedirs(os.path.dirname(self.sum_a), exist_ok=True)
+        os.makedirs(os.path.dirname(self.sum_b), exist_ok=True)
 
     def tearDown(self):
         self.tmpdir.cleanup()
+
+    def test_merge_conversation_summaries_db(self):
+        # Create summary DB A with conv1 and conv2
+        conn_a = sqlite3.connect(self.sum_a)
+        cur_a = conn_a.cursor()
+        cur_a.execute("""
+            CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                title TEXT,
+                preview TEXT,
+                step_count INTEGER,
+                last_modified_time TEXT,
+                workspace_uris TEXT
+            )
+        """)
+        cur_a.execute("INSERT INTO conversation_summaries VALUES ('conv1', 'Conv 1', 'Preview 1', 10, '2026-09-28 10:00:00', '[\"file:///workspace/1\"]')")
+        cur_a.execute("INSERT INTO conversation_summaries VALUES ('conv2', 'Conv 2 v1', 'Preview 2 v1', 5, '2026-09-28 10:00:00', '[\"file:///workspace/1\"]')")
+        conn_a.commit()
+        conn_a.close()
+
+        # Create summary DB B with conv2 (newer) and conv3
+        conn_b = sqlite3.connect(self.sum_b)
+        cur_b = conn_b.cursor()
+        cur_b.execute("""
+            CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                title TEXT,
+                preview TEXT,
+                step_count INTEGER,
+                last_modified_time TEXT,
+                workspace_uris TEXT
+            )
+        """)
+        cur_b.execute("INSERT INTO conversation_summaries VALUES ('conv2', 'Conv 2 v2', 'Preview 2 v2', 20, '2026-09-28 11:00:00', '[\"file:///workspace/1\"]')")
+        cur_b.execute("INSERT INTO conversation_summaries VALUES ('conv3', 'Conv 3', 'Preview 3', 8, '2026-09-28 12:00:00', '[\"file:///workspace/2\"]')")
+        conn_b.commit()
+        conn_b.close()
+
+        count = merge_conversation_summaries_db(self.sum_a, self.sum_b, dry_run=False)
+        self.assertEqual(count, 3)
+
+        # Verify DB A has all 3, with conv2 being the newer one
+        conn_a = sqlite3.connect(self.sum_a)
+        cur_a = conn_a.cursor()
+        rows_a = dict(cur_a.execute("SELECT conversation_id, preview FROM conversation_summaries").fetchall())
+        conn_a.close()
+
+        self.assertEqual(len(rows_a), 3)
+        self.assertEqual(rows_a['conv2'], 'Preview 2 v2')
+
+        # Verify DB B also has all 3
+        conn_b = sqlite3.connect(self.sum_b)
+        cur_b = conn_b.cursor()
+        rows_b = dict(cur_b.execute("SELECT conversation_id, preview FROM conversation_summaries").fetchall())
+        conn_b.close()
+
+        self.assertEqual(len(rows_b), 3)
+        self.assertEqual(rows_b['conv1'], 'Preview 1')
 
     def test_bidirectional_sqlite_merge(self):
         # Database A has 3 conversation notifications and a protobuf summary

@@ -170,19 +170,6 @@ def merge_sqlite_vscdb(src_db: str, dst_db: str, dry_run: bool = False, write_bo
     def _write_db(target_path: str):
         if dry_run:
             return
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        if os.path.exists(target_path):
-            try:
-                shutil.copy2(target_path, target_path + ".backup")
-            except Exception:
-                pass
-        conn = sqlite3.connect(target_path)
-        cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)")
-        for k, v in merged_data.items():
-            cursor.execute("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)", (k, v))
-        conn.commit()
-        conn.close()
         try:
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             if os.path.exists(target_path):
@@ -302,6 +289,132 @@ def migrate_extensions(src_dot: str, dst_dot: str, dry_run: bool = False) -> int
             
     return added
 
+def merge_conversation_summaries_db(db_a: str, db_b: str, dry_run: bool = False) -> int:
+    """
+    Merges two conversation_summaries.db SQLite databases two-way.
+    Preserves all conversation records without data loss. If a conversation exists
+    in both databases, selects the record with the latest last_modified_time (or higher step_count).
+    Writes merged results back to both databases.
+    Returns the total number of unique conversations.
+    """
+    if not os.path.exists(db_a) and not os.path.exists(db_b):
+        return 0
+
+    def _get_table_schema(db_path: str):
+        if not os.path.exists(db_path):
+            return None, []
+        try:
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            cur = conn.cursor()
+            cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='conversation_summaries'")
+            row = cur.fetchone()
+            schema_sql = row[0] if row else None
+            cur.execute("PRAGMA table_info(conversation_summaries)")
+            cols = [col[1] for col in cur.fetchall()]
+            conn.close()
+            return schema_sql, cols
+        except Exception as e:
+            log(f"Warning: Could not read schema from {db_path}: {e}", "WARN")
+            return None, []
+
+    schema_a, cols_a = _get_table_schema(db_a)
+    schema_b, cols_b = _get_table_schema(db_b)
+
+    schema = schema_a or schema_b
+    cols = cols_a or cols_b
+    if not cols:
+        return 0
+
+    def _read_records(db_path: str):
+        if not os.path.exists(db_path):
+            return {}
+        try:
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_summaries'")
+            if not cur.fetchone():
+                conn.close()
+                return {}
+            cur.execute("SELECT * FROM conversation_summaries")
+            records = {row["conversation_id"]: dict(row) for row in cur.fetchall() if row["conversation_id"]}
+            conn.close()
+            return records
+        except Exception as e:
+            log(f"Warning: Could not read conversation_summaries from {db_path}: {e}", "WARN")
+            return {}
+
+    records_a = _read_records(db_a)
+    records_b = _read_records(db_b)
+
+    all_ids = set(records_a.keys()) | set(records_b.keys())
+    merged_records = {}
+
+    for cid in all_ids:
+        rec_a = records_a.get(cid)
+        rec_b = records_b.get(cid)
+        if rec_a and not rec_b:
+            merged_records[cid] = rec_a
+        elif rec_b and not rec_a:
+            merged_records[cid] = rec_b
+        else:
+            time_a = str(rec_a.get("last_modified_time") or "")
+            time_b = str(rec_b.get("last_modified_time") or "")
+            step_a = int(rec_a.get("step_count") or 0)
+            step_b = int(rec_b.get("step_count") or 0)
+
+            if time_a > time_b:
+                merged_records[cid] = rec_a
+            elif time_b > time_a:
+                merged_records[cid] = rec_b
+            elif step_a >= step_b:
+                merged_records[cid] = rec_a
+            else:
+                merged_records[cid] = rec_b
+
+    if not dry_run and merged_records:
+        def _write_records(target_db: str):
+            try:
+                os.makedirs(os.path.dirname(target_db), exist_ok=True)
+                if os.path.exists(target_db):
+                    try:
+                        shutil.copy2(target_db, target_db + ".backup")
+                    except Exception:
+                        pass
+                conn = sqlite3.connect(target_db, timeout=10.0)
+                cur = conn.cursor()
+                if schema:
+                    schema_safe = re.sub(r"CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)", "CREATE TABLE IF NOT EXISTS ", schema, count=1, flags=re.IGNORECASE)
+                    cur.execute(schema_safe)
+                
+                cur.execute("PRAGMA table_info(conversation_summaries)")
+                target_cols = [c[1] for c in cur.fetchall()]
+
+                if "last_user_input_time" in target_cols:
+                    cur.execute("CREATE INDEX IF NOT EXISTS idx_conversation_summaries_last_user_input_time ON conversation_summaries(last_user_input_time)")
+                if "last_modified_time" in target_cols:
+                    cur.execute("CREATE INDEX IF NOT EXISTS idx_conversation_summaries_last_modified_time ON conversation_summaries(last_modified_time)")
+                
+                col_names = [c for c in cols if c in target_cols]
+                placeholders = ", ".join(["?"] * len(col_names))
+                sql = f"INSERT OR REPLACE INTO conversation_summaries ({', '.join(col_names)}) VALUES ({placeholders})"
+                
+                rows_to_insert = []
+                for rec in merged_records.values():
+                    row = [rec.get(c) for c in col_names]
+                    rows_to_insert.append(row)
+                
+                cur.executemany(sql, rows_to_insert)
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                log(f"Warning: Could not write conversation_summaries to {target_db}: {e}", "WARN")
+
+        _write_records(db_a)
+        _write_records(db_b)
+
+    return len(merged_records)
+
 def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> int:
     """Bi-directionally synchronizes workspaceStorage folders and merges inner databases."""
     if not os.path.exists(dir_a) and not os.path.exists(dir_b):
@@ -324,6 +437,7 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
         
         if os.path.exists(path_a) and not os.path.exists(path_b):
             if not dry_run:
+                shutil.copytree(path_a, path_b, symlinks=True)
                 try:
                     shutil.copytree(path_a, path_b, symlinks=True)
                 except Exception as e:
@@ -331,6 +445,7 @@ def merge_workspace_storage(dir_a: str, dir_b: str, dry_run: bool = False) -> in
             merged_count += 1
         elif os.path.exists(path_b) and not os.path.exists(path_a):
             if not dry_run:
+                shutil.copytree(path_b, path_a, symlinks=True)
                 try:
                     shutil.copytree(path_b, path_a, symlinks=True)
                 except Exception as e:
@@ -492,15 +607,13 @@ def sync_bidirectional(dry_run: bool = False):
     
     # 1. Gemini Brains, Conversations & Assistant States
     if not dry_run:
-        os.makedirs(PATH_GEMINI_MAIN, exist_ok=True)
-        os.makedirs(PATH_GEMINI_IDE, exist_ok=True)
         try:
             os.makedirs(PATH_GEMINI_MAIN, exist_ok=True)
             os.makedirs(PATH_GEMINI_IDE, exist_ok=True)
         except OSError as e:
             log(f"Warning: Could not create Gemini directories ({e}). Continuing with existing paths.", "WARN")
     
-    for sub in ["brain", "conversations", "knowledge", "html_artifacts"]:
+    for sub in ["brain", "conversations", "knowledge", "html_artifacts", "annotations"]:
         dir_main = os.path.join(PATH_GEMINI_MAIN, sub)
         dir_ide = os.path.join(PATH_GEMINI_IDE, sub)
         c1 = copy_or_merge_directory(dir_main, dir_ide, dry_run=dry_run)
@@ -508,6 +621,14 @@ def sync_bidirectional(dry_run: bool = False):
         if c1 > 0 or c2 > 0:
             log(f"Synchronized {sub}: {c1} files -> IDE, {c2} files -> Desktop", "SUCCESS")
             
+    # Sync conversation_summaries.db
+    sum_main = os.path.join(PATH_GEMINI_MAIN, "conversation_summaries.db")
+    sum_ide = os.path.join(PATH_GEMINI_IDE, "conversation_summaries.db")
+    if os.path.exists(sum_main) or os.path.exists(sum_ide):
+        log("Synchronizing conversation summaries (conversation_summaries.db)...", "STEP")
+        total_convs = merge_conversation_summaries_db(sum_main, sum_ide, dry_run=dry_run)
+        log(f"Both Antigravity 2.0 and IDE now have {total_convs} synchronized conversation records", "SUCCESS")
+
     # Sync state.pbtxt & summaries
     for state_file in ["antigravity_state.pbtxt", "agyhub_summaries_proto.pb"]:
         f_main = os.path.join(PATH_GEMINI_MAIN, state_file)
@@ -1674,7 +1795,7 @@ def get_status_dict():
                 "size_mb": 0.0
             }
             
-    # Check databases
+    # Check state databases
     db_paths = [
         ("desktop_2", os.path.join(PATH_CONFIG_LEGACY, "User", "globalStorage", "state.vscdb")),
         ("ide", os.path.join(PATH_CONFIG_IDE, "User", "globalStorage", "state.vscdb"))
@@ -1701,6 +1822,28 @@ def get_status_dict():
                 status["databases"][name] = {"exists": False, "total_keys": 0, "chat_notifications": 0}
         else:
             status["databases"][name] = {"exists": False, "total_keys": 0, "chat_notifications": 0}
+
+    # Check conversation summary databases
+    sum_paths = [
+        ("gemini_main_summaries", os.path.join(PATH_GEMINI_MAIN, "conversation_summaries.db")),
+        ("gemini_ide_summaries", os.path.join(PATH_GEMINI_IDE, "conversation_summaries.db")),
+    ]
+    for name, p in sum_paths:
+        if os.path.exists(p):
+            try:
+                conn = sqlite3.connect(p, timeout=5.0)
+                cur = conn.cursor()
+                cur.execute("SELECT count(*) FROM conversation_summaries")
+                count = cur.fetchone()[0]
+                conn.close()
+                status["databases"][name] = {
+                    "exists": True,
+                    "total_conversations": count
+                }
+            except Exception:
+                status["databases"][name] = {"exists": False, "total_conversations": 0}
+        else:
+            status["databases"][name] = {"exists": False, "total_conversations": 0}
             
     if len(db_keys) == 2 and db_keys["desktop_2"] == db_keys["ide"] and db_keys["desktop_2"] > 0:
         status["sync_status"] = "synced"
@@ -1918,7 +2061,10 @@ def main():
         print("\n=== Database Keys & Chats ===")
         for name, db in status_data["databases"].items():
             if db["exists"]:
-                print(f"  ✔ {name}: {db['total_keys']} total keys, {db['chat_notifications']} conversation threads")
+                if "total_conversations" in db:
+                    print(f"  ✔ {name}: {db['total_conversations']} indexed conversations")
+                else:
+                    print(f"  ✔ {name}: {db['total_keys']} total keys, {db['chat_notifications']} conversation threads")
             else:
                 print(f"  - {name}: no database")
         print(f"Sync Status: {status_data['sync_status'].upper()}")
