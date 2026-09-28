@@ -110,6 +110,8 @@ Integrations & Third-Party Tools:
   --desktop-entry          Install Linux desktop launchers & URL protocol handlers (antigravity://)
 
 Options & Flags:
+  --restart               Auto-close running Antigravity IDE and relaunch after switching
+  --auto-close            Auto-close running Antigravity IDE before switching accounts
   --disable-gpu           Disable GPU hardware acceleration in argv.json (software rendering)
   --target-dir DIR        Specify exact target installation directory
   --scope SCOPE           Installation scope: 'system' (/opt, /usr), 'user' (~/.local), or 'auto'
@@ -170,6 +172,8 @@ DO_DIAGNOSE_COCKPIT=0
 DO_ACCOUNT=0
 DO_SWITCH=0
 SWITCH_TARGET=""
+DO_RESTART_IDE=0
+DO_AUTO_CLOSE_IDE=0
 DO_ACCOUNTS=0
 DO_INSTANCES=0
 DO_INSTANCE=0
@@ -319,6 +323,12 @@ while [ $# -gt 0 ]; do
             ;;
         --disable-gpu)
             DISABLE_GPU=1
+            ;;
+        --restart)
+            DO_RESTART_IDE=1
+            ;;
+        --auto-close)
+            DO_AUTO_CLOSE_IDE=1
             ;;
         --export-accounts|export-accounts)
             DO_EXPORT_ACCOUNTS=1
@@ -477,7 +487,7 @@ if [ "$DO_ACCOUNT" -eq 1 ]; then
 fi
 
 if [ "$DO_SWITCH" -eq 1 ]; then
-    switch_cockpit_account "$SWITCH_TARGET"
+    switch_cockpit_account "$SWITCH_TARGET" "both" "$DO_RESTART_IDE" "$DO_AUTO_CLOSE_IDE"
     exit 0
 fi
 

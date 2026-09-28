@@ -522,8 +522,7 @@ if os.path.exists(config_path):
 data["antigravity_app_path"] = chosen_path
 if "antigravity_launch_on_switch" not in data:
     data["antigravity_launch_on_switch"] = True
-if "antigravity_dual_switch_no_restart_enabled" not in data:
-    data["antigravity_dual_switch_no_restart_enabled"] = False
+data["antigravity_dual_switch_no_restart_enabled"] = True
 
 try:
     with open(config_path, "w", encoding="utf-8") as f:
@@ -599,10 +598,15 @@ list_cockpit_accounts() {
 switch_cockpit_account() {
     local target="${1:-}"
     local app_target="${2:-both}"
+    local restart_flag="${3:-0}"
+    local auto_close_flag="${4:-0}"
+    local extra_args=()
+    [ "$restart_flag" -eq 1 ] && extra_args+=("--restart")
+    [ "$auto_close_flag" -eq 1 ] && extra_args+=("--auto-close")
     if [ -n "$target" ]; then
-        python3 "$PROJECT_ROOT/lib/migrator.py" --switch "$target" --switch-app "$app_target"
+        python3 "$PROJECT_ROOT/lib/migrator.py" --switch "$target" --switch-app "$app_target" "${extra_args[@]}"
     else
-        python3 "$PROJECT_ROOT/lib/migrator.py" --switch --switch-app "$app_target"
+        python3 "$PROJECT_ROOT/lib/migrator.py" --switch --switch-app "$app_target" "${extra_args[@]}"
     fi
 }
 

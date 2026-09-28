@@ -1174,10 +1174,12 @@ def send_cockpit_ws_request(port: int, req_type: str, payload: dict, timeout: fl
     except Exception:
         return None
 
-def switch_cockpit_account(target: str = None, target_app: str = "both") -> tuple:
+def switch_cockpit_account(target: str = None, target_app: str = "both", auto_close: bool = False, restart: bool = False) -> tuple:
     """
     Switches active account in Cockpit Tools, Antigravity IDE, and/or Antigravity 2.0.
     target: 1-based index, email address, or account ID. If None, user is prompted interactively.
+    auto_close: Automatically terminate running Antigravity IDE processes before switching.
+    restart: Automatically terminate running Antigravity IDE processes and relaunch after switching.
     Returns: (success: bool, message: str, account_info: dict)
     """
     accounts = get_all_cockpit_accounts()
@@ -1239,6 +1241,36 @@ def switch_cockpit_account(target: str = None, target_app: str = "both") -> tupl
     if not chosen:
         avail = "\n".join([f"  [{i+1}] {a.get('email')} ({a.get('name', 'N/A')})" for i, a in enumerate(accounts)])
         return False, f"Account '{target}' not found. Available accounts:\n{avail}", None
+
+    if auto_close or restart:
+        try:
+            out = subprocess.check_output(["pgrep", "-f", "antigravity-ide"], stderr=subprocess.DEVNULL).decode()
+            pids = [int(p.strip()) for p in out.strip().split() if p.strip()]
+        except Exception:
+            pids = []
+
+        if pids:
+            log(f"Auto-closing {len(pids)} running Antigravity IDE process(es) before account switch...", "INFO")
+            subprocess.run(["pkill", "-f", "antigravity-ide"], stderr=subprocess.DEVNULL)
+            for _ in range(15):
+                time.sleep(0.2)
+                try:
+                    subprocess.check_output(["pgrep", "-f", "antigravity-ide"], stderr=subprocess.DEVNULL)
+                except Exception:
+                    pids = []
+                    break
+            if pids:
+                subprocess.run(["pkill", "-9", "-f", "antigravity-ide"], stderr=subprocess.DEVNULL)
+                time.sleep(0.3)
+
+            for lock_dir in [PATH_CONFIG_IDE, PATH_CONFIG_LEGACY]:
+                if os.path.isdir(lock_dir):
+                    for lf in glob.glob(os.path.join(lock_dir, "Singleton*")):
+                        try:
+                            os.remove(lf)
+                        except Exception:
+                            pass
+            log("Antigravity IDE successfully closed.", "SUCCESS")
 
     cockpit_dir = get_cockpit_dir()
     server_json = os.path.join(cockpit_dir, "server.json")
@@ -1313,8 +1345,22 @@ def switch_cockpit_account(target: str = None, target_app: str = "both") -> tupl
         pass
 
     mode_str = "Online Cockpit IPC + SQLite Sync" if online_ipc else "Direct SQLite Credential Injection"
-    apps_str = ", ".join(injected) if injected else "Cockpit state files"
-    msg = f"Successfully activated {chosen.get('email')} ({mode_str} into {apps_str})"
+    if restart:
+        ide_exec = None
+        for cand in [
+            os.path.join(HOME, ".local/share/antigravity-ide/antigravity-ide"),
+            os.path.join(HOME, ".local/share/antigravity-ide/bin/antigravity-ide"),
+            os.path.join(HOME, ".local/bin/antigravity-ide"),
+            "/usr/local/bin/antigravity-ide",
+        ]:
+            if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                ide_exec = cand
+                break
+        if ide_exec:
+            log(f"Relaunching Antigravity IDE: {ide_exec}...", "INFO")
+            subprocess.Popen([ide_exec], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            log("Antigravity IDE restarted with new active account!", "SUCCESS")
+
     return True, msg, chosen
 
 def get_cockpit_instances_dir() -> str:
@@ -1877,6 +1923,8 @@ def main():
     parser.add_argument("--accounts", "--list-accounts", dest="list_accounts", action="store_true", help="List all saved accounts in Cockpit Tools with token health status")
     parser.add_argument("--switch", nargs="?", const="", help="Switch active account by index, email, or ID (prompts if omitted)")
     parser.add_argument("--switch-app", choices=["ide", "desktop", "both"], default="both", help="Target application for account switch (default: both)")
+    parser.add_argument("--auto-close", action="store_true", help="Auto-close running Antigravity IDE instances before switching")
+    parser.add_argument("--restart", action="store_true", help="Auto-close and restart Antigravity IDE after account switch")
     parser.add_argument("--instances", "--list-instances", dest="list_instances", action="store_true", help="List configured Cockpit multi-instance profiles")
     parser.add_argument("--create-instance", dest="create_instance", help="Create or configure a multi-instance profile by name")
     parser.add_argument("--bind-account", dest="bind_account", help="Account index, email, or ID to bind to instance profile")
@@ -1929,7 +1977,7 @@ def main():
 
     if args.switch is not None:
         target = args.switch if args.switch != "" else None
-        success, msg, acc = switch_cockpit_account(target, target_app=args.switch_app)
+        success, msg, acc = switch_cockpit_account(target, target_app=args.switch_app, auto_close=args.auto_close, restart=args.restart)
         if success:
             log(msg, "SUCCESS")
             sys.exit(0)
