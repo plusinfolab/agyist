@@ -58,6 +58,8 @@ source "$LIB_DIR/watcher.sh"
 source "$LIB_DIR/desktop.sh"
 # shellcheck source=lib/cockpit.sh
 source "$LIB_DIR/cockpit.sh"
+# shellcheck source=lib/doctor.sh
+source "$LIB_DIR/doctor.sh"
 # shellcheck source=lib/tui.sh
 source "$LIB_DIR/tui.sh"
 
@@ -97,7 +99,8 @@ Integrations & Third-Party Tools:
   --accounts               List saved Cockpit accounts with token expiration countdown
   --instance NAME [PATH]   Launch isolated Antigravity profile (separate storage & account)
   --instances              List configured multi-instance isolated profiles
-  --repair-cockpit, --doctor Scan & repair Cockpit Tools stale lockups, dead PIDs & paths
+  --doctor, --fix-freeze   Diagnose & repair PC freezes, binary corruption, locks & GPU hangs
+  --repair-cockpit         Scan & repair Cockpit Tools stale lockups, dead PIDs & paths
   --export-accounts [FILE] Export saved accounts to encrypted .agyacc backup
   --import-accounts FILE   Import saved accounts from encrypted .agyacc backup
   --account, --verify-account Show active account status & verify Cockpit/IDE sync
@@ -107,6 +110,7 @@ Integrations & Third-Party Tools:
   --desktop-entry          Install Linux desktop launchers & URL protocol handlers (antigravity://)
 
 Options & Flags:
+  --disable-gpu           Disable GPU hardware acceleration in argv.json (software rendering)
   --target-dir DIR        Specify exact target installation directory
   --scope SCOPE           Installation scope: 'system' (/opt, /usr), 'user' (~/.local), or 'auto'
   --system                Shortcut for --scope system
@@ -172,6 +176,8 @@ DO_INSTANCE=0
 INSTANCE_NAME=""
 INSTANCE_ARGS=()
 DO_REPAIR_COCKPIT=0
+DO_DOCTOR=0
+DISABLE_GPU=0
 DO_EXPORT_ACCOUNTS=0
 EXPORT_PATH=""
 DO_IMPORT_ACCOUNTS=0
@@ -305,8 +311,14 @@ while [ $# -gt 0 ]; do
                 shift
             done
             ;;
-        --repair-cockpit|--doctor|doctor|repair-cockpit)
+        --repair-cockpit|repair-cockpit)
             DO_REPAIR_COCKPIT=1
+            ;;
+        --doctor|doctor|--fix-freeze|fix-freeze|--freeze-fix)
+            DO_DOCTOR=1
+            ;;
+        --disable-gpu)
+            DISABLE_GPU=1
             ;;
         --export-accounts|export-accounts)
             DO_EXPORT_ACCOUNTS=1
@@ -481,6 +493,11 @@ fi
 
 if [ "$DO_INSTANCE" -eq 1 ]; then
     launch_cockpit_instance "$INSTANCE_NAME" "${INSTANCE_ARGS[@]}"
+    exit 0
+fi
+
+if [ "$DO_DOCTOR" -eq 1 ]; then
+    fix_freeze_issues "$DISABLE_GPU"
     exit 0
 fi
 

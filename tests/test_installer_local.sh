@@ -93,5 +93,15 @@ fi
 "
 echo "✔ Launcher safety & recursion prevention test passed"
 
+echo "==> Testing Doctor & Anti-Freeze Diagnostics..."
+DOCTOR_OUTPUT="$("$PROJECT_ROOT/agyist" --doctor -y 2>&1)"
+if ! echo "$DOCTOR_OUTPUT" | grep -q "Antigravity System Doctor & Freeze Diagnostics"; then
+    echo "FAILED: Doctor did not run expected diagnostics!"
+    echo "$DOCTOR_OUTPUT"
+    exit 1
+fi
+echo "✔ Doctor & anti-freeze diagnostics test passed"
+
 echo "==> All automated tests passed successfully!"
+
 

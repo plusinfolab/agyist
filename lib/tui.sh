@@ -14,6 +14,8 @@ source "$SCRIPT_DIR/backup.sh"
 source "$SCRIPT_DIR/fleet.sh"
 # shellcheck source=lib/cockpit.sh
 source "$SCRIPT_DIR/cockpit.sh"
+# shellcheck source=lib/doctor.sh
+source "$SCRIPT_DIR/doctor.sh"
 
 run_cockpit_menu() {
     while true; do
@@ -110,13 +112,14 @@ run_interactive_menu() {
         echo -e "  ${CYAN}11)${RESET} ${BOLD}Verify Active Accounts & Switch Status${RESET} (IDE vs Cockpit)"
         echo -e "  ${CYAN}12)${RESET} ${BOLD}Background Auto-Sync Watcher${RESET} (Real-time daemon / service)"
         echo -e "  ${CYAN}13)${RESET} ${BOLD}Register Desktop Entry & URL Protocols${RESET} (antigravity://)"
-        echo -e "  ${CYAN}14)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
-        echo -e "  ${CYAN}15)${RESET} View System Diagnostics & Installation Status"
-        echo -e "  ${CYAN}16)${RESET} Uninstall Antigravity"
-        echo -e "  ${CYAN}17)${RESET} Exit"
+        echo -e "  ${CYAN}14)${RESET} ${BOLD}Fix PC Freezes & System Doctor${RESET} (auto-repair locks, GPU, inotify)"
+        echo -e "  ${CYAN}15)${RESET} ${BOLD}Self-Update agyist CLI Suite${RESET} (fetch latest commits from GitHub)"
+        echo -e "  ${CYAN}16)${RESET} View System Diagnostics & Installation Status"
+        echo -e "  ${CYAN}17)${RESET} Uninstall Antigravity"
+        echo -e "  ${CYAN}18)${RESET} Exit"
         echo ""
 
-        read -rp "Enter choice [1-17]: " choice
+        read -rp "Enter choice [1-18]: " choice
         case "$choice" in
             1)
                 echo ""
@@ -253,13 +256,17 @@ run_interactive_menu() {
                 ;;
             14)
                 echo ""
-                self_update_agyist 0
+                fix_freeze_issues 0
                 ;;
             15)
                 echo ""
-                show_system_status 0
+                self_update_agyist 0
                 ;;
             16)
+                echo ""
+                show_system_status 0
+                ;;
+            17)
                 echo ""
                 read -rp "Are you sure you want to uninstall Antigravity? [y/N]: " confirm
                 if [[ "$confirm" =~ ^[Yy]$ ]]; then
@@ -268,7 +275,7 @@ run_interactive_menu() {
                     log_info "Uninstall cancelled."
                 fi
                 ;;
-            17|q|Q)
+            18|q|Q)
                 echo "Exiting."
                 exit 0
                 ;;
