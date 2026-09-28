@@ -51,22 +51,8 @@ create_cli_launcher() {
     mkdir -p "$bin_dir"
     local launcher_path="$bin_dir/$binary_name"
 
-    # Safety check: Never overwrite target executable with launcher
-    if [ "$launcher_path" = "$target_exec" ]; then
-        log_warn "Launcher path equals target executable ($launcher_path). Skipping self-overwrite."
-        return 0
-    fi
-
-    # Always remove existing file or symlink before writing to avoid truncating symlink targets
-    rm -f "$launcher_path"
-
-    # If the application provides an official bin launcher script, prefer symlinking to it
-    if [ -x "$install_dir/bin/$binary_name" ]; then
-        ln -sf "$install_dir/bin/$binary_name" "$launcher_path"
-        log_success "Linked CLI launcher: $launcher_path -> $install_dir/bin/$binary_name"
-    else
-        # Create robust wrapper script that handles CLI arguments
-        cat > "$launcher_path" <<LAUNCHER
+    # Create robust wrapper script that handles CLI arguments and remote tunnels
+    cat > "$launcher_path" <<LAUNCHER
 #!/usr/bin/env sh
 # agyist generated launcher for $binary_name
 
@@ -80,16 +66,17 @@ fi
 
 # Check for VS Code style CLI javascript entry
 CLI="\$APP_DIR/resources/app/out/cli.js"
-if [ -f "\$CLI" ] && file "\$EXEC" 2>/dev/null | grep -q "ELF"; then
+if [ -f "\$CLI" ]; then
     ELECTRON_RUN_AS_NODE=1 "\$EXEC" "\$CLI" "\$@"
     exit \$?
 else
-    exec "\$EXEC" "\$@"
+    "\$EXEC" "\$@"
+    exit \$?
 fi
 LAUNCHER
-        chmod 755 "$launcher_path"
-        log_success "Created CLI launcher: $launcher_path"
-    fi
+
+    chmod 755 "$launcher_path"
+    log_success "Created CLI launcher: $launcher_path"
 
     # Provide shorthand 'agy' command launcher if not present
     if [ ! -e "$bin_dir/agy" ]; then
@@ -132,9 +119,11 @@ install_product() {
         # shellcheck source=lib/resolver.sh
         source "$SCRIPT_DIR/resolver.sh"
         local resolve_output
+        resolve_output="$(python3 "$SCRIPT_DIR/resolver.py" --product "$product" --platform "$platform")"
         resolve_output="$(resolve_official_download "$product" "$platform")"
         version="$(echo "$resolve_output" | awk '{print $1}')"
         url="$(echo "$resolve_output" | awk '{print $2}')"
+        log_info "Latest version: $version"
         local source_type
         source_type="$(echo "$resolve_output" | awk '{print $3}')"
         log_info "Latest version: $version (source: $source_type)"
@@ -292,8 +281,8 @@ install_product() {
     # Create CLI Launchers
     if [ "$product" = "ide" ]; then
         create_cli_launcher "antigravity-ide" "$installed_exec" "$bin_dir" "$install_dir"
-        # Only alias 'antigravity' to IDE if Antigravity 2.0 Desktop is not installed
-        if [ ! -f "$HOME/.local/share/antigravity/antigravity" ] && [ ! -f "/opt/antigravity/antigravity" ] && [ ! -f "/usr/share/antigravity/antigravity" ]; then
+        create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
+        if [ ! -f "$bin_dir/antigravity" ]; then
             create_cli_launcher "antigravity" "$installed_exec" "$bin_dir" "$install_dir"
         fi
     else

@@ -1501,11 +1501,21 @@ def repair_cockpit_tools() -> dict:
                         repaired_path = cand
                         break
                         
+            cfg_changed = False
             if repaired_path and repaired_path != app_path:
                 cfg["antigravity_app_path"] = repaired_path
+                cfg_changed = True
+                repairs.append(f"Updated antigravity_app_path in config.json to modern build: {repaired_path}")
+
+            # Enable seamless dual switch without restart to prevent chat reset on account switch
+            if not cfg.get("antigravity_dual_switch_no_restart_enabled"):
+                cfg["antigravity_dual_switch_no_restart_enabled"] = True
+                cfg_changed = True
+                repairs.append("Enabled seamless dual switch without restart (prevents chat history reset on account switch)")
+
+            if cfg_changed:
                 with open(config_file, "w", encoding="utf-8") as f:
                     json.dump(cfg, f, indent=2)
-                repairs.append(f"Updated antigravity_app_path in config.json to modern build: {repaired_path}")
         except Exception as e:
             warnings.append(f"Could not inspect config.json: {e}")
 
