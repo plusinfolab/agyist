@@ -165,12 +165,12 @@ install_product() {
             # Verify that the installation files actually exist and are executable
             local existing_exec=""
             if [ "$product" = "ide" ]; then
-                if [ -x "$install_dir/antigravity-ide" ]; then
-                    existing_exec="$install_dir/antigravity-ide"
-                elif [ -x "$install_dir/antigravity" ]; then
-                    existing_exec="$install_dir/antigravity"
-                elif [ -x "$install_dir/bin/antigravity-ide" ]; then
+                if [ -x "$install_dir/bin/antigravity-ide" ]; then
                     existing_exec="$install_dir/bin/antigravity-ide"
+                elif [ -x "$install_dir/antigravity-ide" ] && file "$install_dir/antigravity-ide" 2>/dev/null | grep -q "ELF"; then
+                    existing_exec="$install_dir/antigravity-ide"
+                elif [ -x "$install_dir/antigravity" ] && file "$install_dir/antigravity" 2>/dev/null | grep -q "ELF"; then
+                    existing_exec="$install_dir/antigravity"
                 fi
             else
                 if [ -x "$install_dir/antigravity" ]; then
