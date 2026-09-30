@@ -72,9 +72,23 @@ curl -fsSL https://raw.githubusercontent.com/plusinfolab/agyist/main/install.sh 
 ```
 
 ### 2. Interactive Terminal UI
-When run locally without arguments, `agyist` presents an interactive terminal wizard:
-```bash
-agyist
+When run locally without arguments, `agyist` presents an organized terminal interface structured into **Quick Actions** for daily tasks and **Management Hubs** for specialized features:
+```text
+=== Quick Actions ===
+  1)  ⚡ Quick Install / Update Antigravity IDE
+  2)  👤 Switch Active Account (Instant CLI switcher)
+  3)  🩺 Fix PC Freezes & System Doctor
+
+=== Management Hubs ===
+  4)  🚀 Installation & Upgrade Hub     (IDE, 2.0 Desktop, Both)
+  5)  👥 Multi-Account & Cockpit Hub    (Accounts, Token Health, Profiles)
+  6)  🔄 Data & State Sync Hub          (Chats, Brains, Auto-Watcher, Backup)
+  7)  🛠  Fleet & System Utilities Hub   (Offline Bundles, Autoupdate, Launchers)
+
+=== System ===
+  8)  📊 View System Diagnostics & Installation Status
+  9)  ⬇  Self-Update agyist CLI Suite (GitHub)
+  0)  🚪 Exit
 ```
 
 ### 3. Standalone & Fleet Commands
@@ -171,15 +185,19 @@ python3 lib/migrator.py --create-instance client-work --bind-account 2
 agyist --instances
 ```
 
-### 4. Cockpit Health Doctor & Auto-Repair (`--doctor` / `--repair-cockpit`)
-Diagnose and repair common Cockpit Tools lockups, stale files, and broken paths:
+### 4. System Doctor, Anti-Freeze & Cockpit Repair (`--doctor` / `--fix-freeze`)
+Diagnose and auto-repair system freezes, stale process locks, GPU crashes, and Cockpit Tools configurations:
 ```bash
 agyist --doctor
+# or
+agyist --fix-freeze
 ```
-- Safely removes stale `config.json.lock` and `.cockpit-token-locks/*`.
-- Detects and cleans up orphaned `server.json` pointing to dead process IDs.
-- Verifies and auto-repairs `antigravity_app_path` in `config.json` to the latest valid executable.
-- Ensures required directory signatures (`bin/antigravity-ide`) exist.
+- **Recursive Launcher Repair**: Automatically detects and repairs damaged non-ELF scripts in `~/.local/share/antigravity-ide/` (preventing CPU fork-bomb lockups).
+- **GPU Deadlock Prevention**: Cleans corrupted shader caches (`GPUCache`, `DawnWebGPUCache`, `Code Cache`) and provides software rendering toggle (`--disable-gpu` / `argv.json`).
+- **Process & Socket Cleanup**: Terminates hanging zombie processes and deletes dead Electron `Singleton*` lock sockets.
+- **Kernel Watcher Limits**: Checks `/proc/sys/fs/inotify/max_user_watches` and prevents 100% CPU lockups on large workspaces.
+- **Cockpit Seamless Switch**: Enforces `"antigravity_dual_switch_no_restart_enabled": true` so account switches in Cockpit GUI never fail with *"Cannot close managed Antigravity IDE"* and never interrupt active terminal sessions.
+- **Path Alignment**: Aligns `antigravity_app_path` to the native binary and restores directory signatures.
 
 ### 5. Encrypted Account Export & Import (`--export-accounts` / `--import-accounts`)
 Transfer or backup all saved Cockpit accounts using industry-standard **PBKDF2-HMAC-SHA256 (100,000 iterations) + AES-256-GCM**:
@@ -222,10 +240,14 @@ agyist --remove-watch      # Disable and remove background service
 | `agyist --check-update` | Check for updates (exit `0`: up to date, `10`: update available) |
 | `agyist --sync` | Bi-directionally synchronize chats, brains & state (2.0 <-> IDE) |
 | `agyist --switch [target]` | Instant account switcher (index, email, or interactive selection) |
+| `agyist --switch <target> --restart` | Switch account and automatically restart Antigravity IDE |
+| `agyist --switch <target> --auto-close` | Switch account and automatically close running Antigravity IDE |
 | `agyist --accounts` | List saved Cockpit accounts with real-time token health countdown |
 | `agyist --instance <name> [path]` | Launch isolated Antigravity profile (separate user-data-dir & account) |
 | `agyist --instances` | List configured multi-instance isolated profiles |
-| `agyist --doctor`, `--repair-cockpit` | Health doctor to clean stale locks, dead PIDs, and align paths |
+| `agyist --doctor`, `--fix-freeze` | Comprehensive system doctor: repairs freezes, locks, GPU caches & paths |
+| `agyist --disable-gpu` | Disable GPU hardware acceleration in argv.json (software rendering) |
+| `agyist --repair-cockpit` | Scan and auto-repair Cockpit Tools stale lockups, dead PIDs, and paths |
 | `agyist --export-accounts [file]` | Password-encrypted archive export (PBKDF2 + AES-256-GCM) |
 | `agyist --import-accounts <file>` | Import and re-encrypt saved accounts from .agyacc archive |
 | `agyist --bundle [file]` | Generate standalone offline deployment bundle for office machines |
@@ -296,8 +318,9 @@ agyist/
 │   ├── migrator.py            # Brain, chat, state.vscdb & protobuf sync engine
 │   ├── backup.sh              # Backup, restore & sync CLI integration
 │   ├── cockpit.sh             # Cockpit Tools account switcher & path bridge
+│   ├── doctor.sh              # System doctor, freeze diagnostics, GPU & lock auto-repair
 │   ├── watcher.sh             # Real-time state watcher & systemd sync daemon
-│   ├── tui.sh                 # Interactive terminal UI wizard
+│   ├── tui.sh                 # Interactive terminal UI wizard (Hubs & Quick Actions)
 │   └── nautilus.py            # GNOME Files / Nautilus right-click integration
 ├── assets/
 │   └── icons/                 # Authentic 256px, 512px, vector SVG, and brand icons
